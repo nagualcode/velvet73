@@ -1,0 +1,7 @@
+target/
+*.DS_Store
+renders/
+reference/
+# third-party papers and companion audio placed in docs/ (study only, not redistributed)
+docs/TheRhodesDoc/
+docs/*.pdf

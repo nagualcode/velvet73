@@ -1,0 +1,32 @@
+uuid = "018e113f-e193-5e2b-bec2-3685f780afa9"
+name = "Stage 88"
+category = "Worn"
+author = "Jardim Sonoro"
+comment = "The 88-key harp: seven extra bass tines without tone bars."
+
+[params]
+voicing = 0.45
+gap = 2.0
+hammer = 1.0
+touch = 0.5
+condition = 0.3
+a4 = 440.0
+stretch = 1
+keys = 1
+stage_volume = 1.0
+bass_boost = 0.7
+harp = 0.5
+cable = 5.0
+board = 0
+amp = 0
+amp_volume = 4.0
+treble = 5.5
+middle = 4.5
+bass = 5.0
+bright = 0
+reverb = 3.0
+speed = 4.5
+intensity = 1.0
+mic = 0.35
+noise = 1.0
+output = 0.0

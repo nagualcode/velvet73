@@ -1,0 +1,32 @@
+uuid = "24130d31-1952-52be-83a8-9bf0278c8969"
+name = "Twin Line Out"
+category = "Studio"
+author = "Jardim Sonoro"
+comment = "The amp's speaker tap without the cabinet: all the tubes, none of the 12-inch cones."
+
+[params]
+voicing = 0.45
+gap = 2.0
+hammer = 1.0
+touch = 0.5
+condition = 0.15
+a4 = 440.0
+stretch = 1
+keys = 0
+stage_volume = 1.0
+bass_boost = 0.8
+harp = 0.5
+cable = 5.0
+board = 0
+amp = 1
+amp_volume = 4.0
+treble = 5.0
+middle = 4.5
+bass = 5.5
+bright = 0
+reverb = 3.0
+speed = 4.5
+intensity = 1.0
+mic = 0.35
+noise = 1.0
+output = 2.0

@@ -1,0 +1,32 @@
+uuid = "d4530866-86d1-5024-bd73-44df6024a41b"
+name = "Factory"
+category = "Stage"
+author = "Jardim Sonoro"
+comment = "A 1975 Stage 73 as it left the regulation bench, into a Twin on 4."
+
+[params]
+voicing = 0.45
+gap = 2.0
+hammer = 1.0
+touch = 0.5
+condition = 0.15
+a4 = 440.0
+stretch = 1
+keys = 0
+stage_volume = 1.0
+bass_boost = 0.8
+harp = 0.5
+cable = 5.0
+board = 0
+amp = 0
+amp_volume = 4.0
+treble = 5.5
+middle = 4.5
+bass = 5.0
+bright = 0
+reverb = 3.0
+speed = 4.5
+intensity = 1.0
+mic = 0.35
+noise = 1.0
+output = 0.0

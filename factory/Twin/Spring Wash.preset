@@ -1,0 +1,32 @@
+uuid = "8473e45b-48cc-5a49-99ce-353ab7a9fde0"
+name = "Spring Wash"
+category = "Twin"
+author = "Jardim Sonoro"
+comment = "Reverb up high: the tank's drip on every attack."
+
+[params]
+voicing = 0.45
+gap = 2.0
+hammer = 1.0
+touch = 0.5
+condition = 0.15
+a4 = 440.0
+stretch = 1
+keys = 0
+stage_volume = 1.0
+bass_boost = 0.8
+harp = 0.5
+cable = 5.0
+board = 0
+amp = 0
+amp_volume = 3.6
+treble = 5.0
+middle = 4.5
+bass = 5.0
+bright = 0
+reverb = 7.0
+speed = 4.5
+intensity = 1.0
+mic = 0.35
+noise = 1.0
+output = 2.0

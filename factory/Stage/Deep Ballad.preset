@@ -1,0 +1,32 @@
+uuid = "87c03938-1c39-5ab7-9697-8fe05c6763a9"
+name = "Deep Ballad"
+category = "Stage"
+author = "Jardim Sonoro"
+comment = "Voiced well off the axis with soft hammers: round, dark, close to a sine."
+
+[params]
+voicing = 0.78
+gap = 2.6
+hammer = 0.75
+touch = 0.5
+condition = 0.15
+a4 = 440.0
+stretch = 1
+keys = 0
+stage_volume = 1.0
+bass_boost = 0.8
+harp = 0.5
+cable = 5.0
+board = 0
+amp = 0
+amp_volume = 4.0
+treble = 4.2
+middle = 5.0
+bass = 4.5
+bright = 0
+reverb = 3.8
+speed = 4.5
+intensity = 1.0
+mic = 0.55
+noise = 1.0
+output = 6.0

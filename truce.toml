@@ -1,0 +1,22 @@
+[vendor]
+name = "Jardim Sonoro"
+id = "com.jardimsonoro"
+url = "https://github.com/nagualcode/velvet73"
+au_manufacturer = "JdSn"
+
+[[plugin]]
+name = "Velvet73"
+bundle_id = "velvet73"
+crate = "velvet73"
+category = "instrument"
+description = """
+A Rhodes Mark I Stage 73 and the Fender Twin Reverb it was plugged into, \
+modelled from the tine up: hammers, asymmetric tuning forks, the cone-tipped \
+pickups and their bark, the inductive harp, the Volume and Bass Boost on the \
+nameboard, and the Twin's Vibrato channel with spring reverb and tremolo.
+"""
+fourcc = "Vlv7"
+au3_subtype = "Vlv3"
+au_tag = "Synthesizer"
+vst3_subcategory = "Piano"
+au3_name = "Velvet73 (AUv3)"

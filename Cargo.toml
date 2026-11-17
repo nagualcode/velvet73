@@ -1,0 +1,52 @@
+[package]
+name = "velvet73"
+version = "0.1.0"
+edition = "2024"
+description = "Velvet73: a Rhodes Mark I Stage piano and its Fender Twin Reverb, modelled from the tine up"
+authors = ["Jardim Sonoro", "nagualcode"]
+license = "MIT"
+repository = "https://github.com/nagualcode/velvet73"
+
+[lib]
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[[bin]]
+name = "velvet73-standalone"
+path = "src/main.rs"
+required-features = ["standalone"]
+
+[[bin]]
+name = "velvet73-render"
+path = "src/bin/render.rs"
+
+[features]
+default = ["clap", "vst3", "au"]
+clap = ["dep:truce-clap", "dep:clap-sys"]
+vst3 = ["dep:truce-vst3"]
+au = ["dep:truce-au"]
+standalone = ["dep:truce-standalone"]
+shell = ["truce/shell"]
+rt-paranoid = ["truce/rt-paranoid"]
+
+[dependencies]
+truce = { version = "6.3" }
+truce-core = { version = "6.3" }
+truce-egui = { version = "6.3" }
+egui = { version = "0.34" }
+truce-clap = { version = "6.3", optional = true }
+truce-vst3 = { version = "6.3", optional = true }
+truce-au = { version = "6.3", optional = true }
+truce-standalone = { version = "6.3", features = ["gui"], optional = true }
+clap-sys = { version = "0.5", optional = true }
+hound = "3.5"
+
+[dev-dependencies]
+truce-test = { version = "6.3" }
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+
+[profile.shell]
+inherits = "release"

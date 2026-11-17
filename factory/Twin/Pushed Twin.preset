@@ -1,0 +1,32 @@
+uuid = "45c1e370-9f2b-5a09-98a6-2c50dd596aeb"
+name = "Pushed Twin"
+category = "Twin"
+author = "Jardim Sonoro"
+comment = "Volume past 7: the 6L6s compress and the supply sags on the chords."
+
+[params]
+voicing = 0.45
+gap = 2.0
+hammer = 1.0
+touch = 0.5
+condition = 0.15
+a4 = 440.0
+stretch = 1
+keys = 0
+stage_volume = 1.0
+bass_boost = 0.8
+harp = 0.5
+cable = 5.0
+board = 0
+amp = 0
+amp_volume = 7.5
+treble = 6.0
+middle = 4.5
+bass = 5.0
+bright = 1
+reverb = 2.5
+speed = 4.5
+intensity = 1.0
+mic = 0.35
+noise = 1.0
+output = -14.0

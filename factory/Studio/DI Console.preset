@@ -1,0 +1,32 @@
+uuid = "56a81ede-649f-5f11-8e16-0d0d80c8188f"
+name = "DI Console"
+category = "Studio"
+author = "Jardim Sonoro"
+comment = "Harp, nameboard and cable straight into a DI on the desk. No amp."
+
+[params]
+voicing = 0.45
+gap = 2.0
+hammer = 1.0
+touch = 0.5
+condition = 0.15
+a4 = 440.0
+stretch = 1
+keys = 0
+stage_volume = 1.0
+bass_boost = 0.8
+harp = 0.5
+cable = 5.0
+board = 0
+amp = 2
+amp_volume = 4.0
+treble = 5.5
+middle = 4.5
+bass = 5.0
+bright = 0
+reverb = 3.0
+speed = 4.5
+intensity = 1.0
+mic = 0.35
+noise = 0.5
+output = 0.5
