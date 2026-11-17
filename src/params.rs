@@ -106,11 +106,6 @@ pub struct VelvetParams {
     #[param(name = "Panic", default = 0)]
     pub panic: BoolParam,
 
-    #[meter]
-    pub meter_l: MeterSlot,
-    #[meter]
-    pub meter_r: MeterSlot,
-
     #[skip]
     pub ui: UiShared,
 }

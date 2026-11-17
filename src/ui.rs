@@ -1,11 +1,14 @@
-//! Editor: a dark, flat studio panel in the manner of a modern DAW.
+//! Editor: black tolex and brushed aluminium, the materials of the piano
+//! and the amp, drawn with a modern DAW's economy.
 //!
-//! Top: the name, the presets, the pedal and the output. Across the
+//! Top: the name, the presets and the pedal. Across the
 //! middle: the harp itself, one tine per key, glowing with how far its tip
 //! is swinging (the picture of what the pickups see). Below: three
 //! panels laid out like the hardware's own controls: the piano's
 //! regulation (amber, the colour of the tines), the Stage nameboard
-//! (teal) and the Twin's Vibrato channel (blue). Colour is only an accent.
+//! (teal) and the Twin's Vibrato channel (blue), each a brushed plate
+//! with a black band, skirted knobs with spun caps and jewel lamps.
+//! Colour is only an accent.
 //! No virtual keyboard: play it from yours.
 
 use crate::dsp::KEYS;
@@ -13,7 +16,7 @@ use crate::params::VelvetParams;
 use crate::params::VelvetParamsParamId as P;
 use crate::params::load_f32;
 use crate::presets::{self, Preset};
-use egui::{Align2, Color32, CornerRadius, FontId, Pos2, Rect, Sense, Shape, Stroke, StrokeKind, pos2, vec2};
+use egui::{Align2, Color32, CornerRadius, FontId, Mesh, Pos2, Rect, Sense, Shape, Stroke, StrokeKind, pos2, vec2};
 use std::sync::atomic::Ordering;
 use truce::prelude::*;
 use truce_core::editor::{PluginContext, PluginContextReadF32};
@@ -44,11 +47,20 @@ const AMBER: Color32 = Color32::from_rgb(232, 168, 86);
 const TEAL: Color32 = Color32::from_rgb(92, 184, 164);
 const BLUE: Color32 = Color32::from_rgb(132, 152, 238);
 const RED: Color32 = Color32::from_rgb(226, 98, 90);
+// Tolex, aluminium and the ink printed on it.
+const TOLEX: Color32 = Color32::from_rgb(19, 19, 20);
+const BAND: Color32 = Color32::from_rgb(22, 22, 24);
+const METAL_HI: Color32 = Color32::from_rgb(214, 216, 218);
+const METAL_MID: Color32 = Color32::from_rgb(188, 190, 193);
+const METAL_LO: Color32 = Color32::from_rgb(158, 161, 165);
+const INK: Color32 = Color32::from_rgb(34, 35, 38);
+const INK_DIM: Color32 = Color32::from_rgb(82, 84, 90);
+const SKIRT: Color32 = Color32::from_rgb(24, 24, 26);
 
 pub fn visuals() -> egui::Visuals {
     let mut v = egui::Visuals::dark();
-    v.panel_fill = BG;
-    v.window_fill = BG;
+    v.panel_fill = TOLEX;
+    v.window_fill = TOLEX;
     v
 }
 
@@ -56,6 +68,119 @@ fn mix(a: Color32, b: Color32, t: f32) -> Color32 {
     let t = t.clamp(0.0, 1.0);
     let l = |x: u8, y: u8| (f32::from(x) + (f32::from(y) - f32::from(x)) * t) as u8;
     Color32::from_rgb(l(a.r(), b.r()), l(a.g(), b.g()), l(a.b(), b.b()))
+}
+
+/// Brighten (d > 0) or darken a colour by `d` levels.
+fn shade(c: Color32, d: f32) -> Color32 {
+    let l = |x: u8| (f32::from(x) + d).clamp(0.0, 255.0) as u8;
+    Color32::from_rgb(l(c.r()), l(c.g()), l(c.b()))
+}
+
+/// The accent as printed ink: deep enough to read on aluminium.
+fn ink_of(accent: Color32) -> Color32 {
+    mix(accent, Color32::BLACK, 0.38)
+}
+
+fn hash(i: u32) -> f32 {
+    let mut x = i.wrapping_mul(0x9E37_79B1) ^ 0x5bd1_e995;
+    x ^= x >> 15;
+    x = x.wrapping_mul(0x85EB_CA77);
+    x ^= x >> 13;
+    (x & 0xFFFF) as f32 / 65535.0
+}
+
+fn quad(m: &mut Mesh, r: Rect, tl: Color32, tr: Color32, bl: Color32, br: Color32) {
+    let i = m.vertices.len() as u32;
+    m.colored_vertex(r.left_top(), tl);
+    m.colored_vertex(r.right_top(), tr);
+    m.colored_vertex(r.left_bottom(), bl);
+    m.colored_vertex(r.right_bottom(), br);
+    m.add_triangle(i, i + 1, i + 2);
+    m.add_triangle(i + 1, i + 3, i + 2);
+}
+
+/// Brushed aluminium: a soft top-lit gradient, then streaks along the
+/// grain (one every two screen pixels, each varying along its length),
+/// a bevel and a dark edge.
+fn plate(pt: &egui::Painter, r: Rect, seed: u32) {
+    let mut m = Mesh::default();
+    let y1 = r.top() + r.height() * 0.42;
+    quad(&mut m, Rect::from_min_max(r.left_top(), pos2(r.right(), y1)), METAL_HI, METAL_HI, METAL_MID, METAL_MID);
+    quad(&mut m, Rect::from_min_max(pos2(r.left(), y1), r.right_bottom()), METAL_MID, METAL_MID, METAL_LO, METAL_LO);
+    let rows = (r.height() / 2.0) as u32;
+    let segs = 5u32;
+    let sw = r.width() / segs as f32;
+    for row in 0..rows {
+        let y = r.top() + row as f32 * 2.0;
+        let light = hash(seed ^ row.wrapping_mul(7919)) > 0.5;
+        let a = |k: u32| -> Color32 {
+            let v = hash(seed.wrapping_add(row * 31 + k * 977));
+            let al = (v * v * 26.0) as u8;
+            if light { Color32::from_rgba_unmultiplied(255, 255, 255, al) } else { Color32::from_rgba_unmultiplied(0, 0, 0, al / 2) }
+        };
+        for k in 0..segs {
+            let rr = Rect::from_min_max(pos2(r.left() + k as f32 * sw, y), pos2(r.left() + (k + 1) as f32 * sw, y + 1.0));
+            let (c0, c1) = (a(k), a(k + 1));
+            quad(&mut m, rr, c0, c1, c0, c1);
+        }
+    }
+    pt.add(Shape::mesh(m));
+    pt.line_segment([r.left_top(), r.right_top()], Stroke::new(1.0_f32, Color32::from_rgba_unmultiplied(255, 255, 255, 150)));
+    pt.line_segment([r.left_bottom() - vec2(0.0, 0.5), r.right_bottom() - vec2(0.0, 0.5)], Stroke::new(1.0_f32, Color32::from_rgba_unmultiplied(0, 0, 0, 110)));
+    pt.rect_stroke(r, CornerRadius::ZERO, Stroke::new(1.0_f32, Color32::from_rgba_unmultiplied(0, 0, 0, 160)), StrokeKind::Outside);
+}
+
+/// Spun aluminium (a lathe-turned cap): a conic sheen, two highlights
+/// opposite each other, and fine rings.
+fn spun(pt: &egui::Painter, c: Pos2, r: f32) {
+    let mut m = Mesh::default();
+    m.colored_vertex(c, METAL_MID);
+    let n = 48u32;
+    for k in 0..=n {
+        let th = std::f32::consts::TAU * k as f32 / n as f32;
+        let l = 30.0 * (2.0 * (th + 0.7)).cos() + 8.0 * (6.0 * th).cos() - 6.0;
+        m.colored_vertex(c + vec2(th.cos(), th.sin()) * r, shade(METAL_MID, l));
+        if k > 0 {
+            m.add_triangle(0, k, k + 1);
+        }
+    }
+    pt.add(Shape::mesh(m));
+    for k in 1..4 {
+        pt.circle_stroke(c, r * k as f32 / 4.0, Stroke::new(0.6_f32, Color32::from_rgba_unmultiplied(0, 0, 0, 22)));
+    }
+    pt.circle_stroke(c, r, Stroke::new(1.0_f32, Color32::from_rgba_unmultiplied(0, 0, 0, 120)));
+}
+
+fn screw(pt: &egui::Painter, f: &Frame, c: Pos2, turn: f32) {
+    let r = f.len(4.2);
+    pt.circle_filled(c + vec2(0.0, 0.8), r, Color32::from_rgba_unmultiplied(0, 0, 0, 90));
+    spun(pt, c, r);
+    let d = vec2(turn.cos(), turn.sin()) * r * 0.8;
+    let e = vec2(-d.y, d.x);
+    let s = Stroke::new(f.len(1.1), Color32::from_rgba_unmultiplied(20, 20, 22, 200));
+    pt.line_segment([c - d, c + d], s);
+    pt.line_segment([c - e, c + e], s);
+}
+
+/// A jewel pilot lamp: dark glass off, lit glass with a halo on.
+fn jewel(pt: &egui::Painter, f: &Frame, c: Pos2, on: bool, color: Color32) {
+    let r = f.len(5.0);
+    if on {
+        for k in 0..4 {
+            let rr = r * (1.4 + 0.45 * k as f32);
+            let a = (46.0 / (1.0 + k as f32)) as u8;
+            pt.circle_filled(c, rr, Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), a));
+        }
+    }
+    pt.circle_filled(c, r + f.len(1.4), Color32::from_rgb(70, 72, 76));
+    pt.circle_filled(c, r, if on { color } else { mix(color, Color32::BLACK, 0.78) });
+    pt.circle_filled(c - vec2(r * 0.35, r * 0.35), r * 0.32, Color32::from_rgba_unmultiplied(255, 255, 255, if on { 170 } else { 40 }));
+}
+
+/// An engraved rule across a plate.
+fn groove(pt: &egui::Painter, a: Pos2, b: Pos2) {
+    pt.line_segment([a, b], Stroke::new(1.0_f32, Color32::from_rgba_unmultiplied(0, 0, 0, 70)));
+    pt.line_segment([a + vec2(0.0, 1.0), b + vec2(0.0, 1.0)], Stroke::new(1.0_f32, Color32::from_rgba_unmultiplied(255, 255, 255, 120)));
 }
 
 // ---------------------------------------------------------------------------
@@ -134,13 +259,13 @@ fn drag_param(ui: &egui::Ui, ctx: &Ctx, f: &Frame, resp: &egui::Response, id: P,
 // Widgets
 // ---------------------------------------------------------------------------
 
-/// Flat knob: track arc, value arc in the section accent, needle; label
-/// above, value in a small field below. Label and value are part of the
-/// hit area.
+/// Skirted amp knob on the plate: black skirt, spun-aluminium cap, white
+/// pointer; around it the printed scale and the value arc in the section's
+/// ink; label above, value below. Label and value are part of the hit area.
 fn knob(ui: &mut egui::Ui, ctx: &Ctx, f: &Frame, id: P, label: &str, x: f32, y: f32, r: f32, accent: Color32) {
     let center = f.p(x, y);
     let rad = f.len(r);
-    let hit = Rect::from_min_max(center - vec2(rad * 1.45, rad + f.len(22.0)), center + vec2(rad * 1.45, rad + f.len(26.0)));
+    let hit = Rect::from_min_max(center - vec2(rad * 1.45, rad + f.len(26.0)), center + vec2(rad * 1.45, rad + f.len(28.0)));
     let resp = ui.interact(hit, ui.id().with(("knob", u32::from(id))), Sense::click_and_drag());
     drag_param(ui, ctx, f, &resp, id, 200.0);
     let v = ctx.get_param(id);
@@ -157,20 +282,35 @@ fn knob(ui: &mut egui::Ui, ctx: &Ctx, f: &Frame, id: P, label: &str, x: f32, y: 
             })
             .collect()
     };
-    let w = f.len(if r > 24.0 { 3.4 } else { 2.8 });
-    pt.add(Shape::line(arc(start, start + sweep, rad), Stroke::new(w, TRACK)));
+    let ink = ink_of(accent);
+    // Printed scale: eleven ticks, 0 to 10.
+    for k in 0..=10 {
+        let t = start + sweep * k as f32 / 10.0;
+        let d = vec2(t.cos(), t.sin());
+        let long = k % 5 == 0;
+        pt.line_segment(
+            [center + d * (rad + f.len(3.5)), center + d * (rad + f.len(if long { 9.0 } else { 7.0 }))],
+            Stroke::new(f.len(if long { 1.4 } else { 1.0 }), INK_DIM),
+        );
+    }
     let a = start + sweep * v;
     if v > 0.003 {
-        pt.add(Shape::line(arc(start, a, rad), Stroke::new(w, if hot { mix(accent, TEXT, 0.25) } else { accent })));
+        pt.add(Shape::line(arc(start, a, rad + f.len(3.6)), Stroke::new(f.len(2.6), if hot { mix(ink, accent, 0.5) } else { ink })));
     }
-    pt.circle_filled(center, rad * 0.62, if hot { HEAD } else { PANEL });
-    pt.circle_stroke(center, rad * 0.62, Stroke::new(f.len(1.0), LINE));
+    // Shadow, skirt, cap.
+    pt.circle_filled(center + vec2(0.0, f.len(2.0)), rad * 1.02, Color32::from_rgba_unmultiplied(0, 0, 0, 70));
+    pt.circle_filled(center, rad, SKIRT);
+    pt.circle_stroke(center, rad - f.len(0.8), Stroke::new(f.len(1.0), Color32::from_rgb(58, 58, 62)));
+    let cap = rad * 0.64;
+    spun(pt, center, cap);
+    if hot {
+        pt.circle_stroke(center, cap, Stroke::new(f.len(1.2), mix(accent, Color32::WHITE, 0.3)));
+    }
     let dir = vec2(a.cos(), a.sin());
-    pt.line_segment([center + dir * rad * 0.18, center + dir * rad * 0.58], Stroke::new(f.len(2.0), TEXT));
-    pt.text(center - vec2(0.0, rad + f.len(9.0)), Align2::CENTER_BOTTOM, label.to_uppercase(), f.font(9.5), TEXT_DIM);
-    let vr = Rect::from_center_size(center + vec2(0.0, rad + f.len(14.0)), vec2(f.len(64.0), f.len(16.0)));
-    pt.rect_filled(vr, CornerRadius::same((2.0 * f.s) as u8), FIELD);
-    pt.text(vr.center(), Align2::CENTER_CENTER, ctx.format_param(id), f.mono(9.5), if hot { accent } else { TEXT });
+    pt.line_segment([center + dir * cap * 1.04, center + dir * rad * 0.94], Stroke::new(f.len(2.4), Color32::from_rgb(236, 236, 232)));
+    pt.line_segment([center + dir * cap * 0.25, center + dir * cap * 0.9], Stroke::new(f.len(1.2), Color32::from_rgba_unmultiplied(20, 20, 22, 150)));
+    pt.text(center - vec2(0.0, rad + f.len(13.0)), Align2::CENTER_BOTTOM, label.to_uppercase(), f.font(9.5), INK);
+    pt.text(center + vec2(0.0, rad + f.len(19.0)), Align2::CENTER_CENTER, ctx.format_param(id), f.mono(9.5), if hot { ink } else { INK_DIM });
 }
 
 /// Segmented selector for an enum parameter: click a segment, or drag
@@ -226,18 +366,22 @@ fn toggle(ui: &mut egui::Ui, ctx: &Ctx, f: &Frame, id: P, label: &str, x: f32, y
     let pt = ui.painter();
     pt.rect_filled(r, CornerRadius::same((2.0 * f.s) as u8), if resp.hovered() { HEAD } else { FIELD });
     pt.rect_stroke(r, CornerRadius::same((2.0 * f.s) as u8), Stroke::new(f.len(1.0), if on { mix(accent, LINE, 0.4) } else { LINE }), StrokeKind::Inside);
-    let lamp = Rect::from_center_size(pos2(r.left() + f.len(12.0), r.center().y), vec2(f.len(7.0), f.len(7.0)));
-    pt.rect_filled(lamp, CornerRadius::same((1.0 * f.s) as u8), if on { accent } else { TRACK });
-    pt.text(pos2(r.left() + f.len(22.0), r.center().y), Align2::LEFT_CENTER, label.to_uppercase(), f.font(9.5), if on { TEXT } else { TEXT_DIM });
+    jewel(pt, f, pos2(r.left() + f.len(13.0), r.center().y), on, accent);
+    pt.text(pos2(r.left() + f.len(25.0), r.center().y), Align2::LEFT_CENTER, label.to_uppercase(), f.font(9.5), if on { TEXT } else { TEXT_DIM });
 }
 
+/// A brushed plate with a black band across the top (the silverface way),
+/// four screws, and the section's accent as a thin line under the band.
 fn panel(pt: &egui::Painter, f: &Frame, x: f32, y: f32, w: f32, h: f32, title: &str, sub: &str, accent: Color32) {
-    let r = f.r(x, y, w, h);
-    pt.rect_filled(r, CornerRadius::same((3.0 * f.s) as u8), PANEL);
-    pt.rect_filled(f.r(x, y, w, 26.0), CornerRadius { nw: (3.0 * f.s) as u8, ne: (3.0 * f.s) as u8, sw: 0, se: 0 }, HEAD);
-    pt.rect_filled(f.r(x, y, 3.0, 26.0), CornerRadius::ZERO, accent);
-    pt.text(f.p(x + 14.0, y + 13.0), Align2::LEFT_CENTER, title.to_uppercase(), f.font(10.5), TEXT);
-    pt.text(f.p(x + w - 12.0, y + 13.0), Align2::RIGHT_CENTER, sub, f.font(9.5), TEXT_DIM);
+    let seed = (x as u32).wrapping_mul(2654435761);
+    plate(pt, f.r(x, y, w, h), seed);
+    pt.rect_filled(f.r(x, y, w, 28.0), CornerRadius::ZERO, BAND);
+    pt.rect_filled(f.r(x, y + 28.0, w, 2.0), CornerRadius::ZERO, accent);
+    pt.text(f.p(x + 26.0, y + 14.0), Align2::LEFT_CENTER, title.to_uppercase(), f.font(10.5), TEXT);
+    pt.text(f.p(x + w - 26.0, y + 14.0), Align2::RIGHT_CENTER, sub, f.font(9.5), TEXT_DIM);
+    for (k, (sx, sy)) in [(11.0, 14.0), (w - 11.0, 14.0), (11.0, h - 11.0), (w - 11.0, h - 11.0)].into_iter().enumerate() {
+        screw(pt, f, f.p(x + sx, y + sy), 0.3 + 1.7 * hash(seed + k as u32));
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -312,7 +456,7 @@ pub fn velvet_ui(ui: &mut egui::Ui, ctx: &Ctx) {
     let s = (full.width() / WINDOW_W as f32).min(full.height() / WINDOW_H as f32);
     let size = vec2(WINDOW_W as f32 * s, WINDOW_H as f32 * s);
     let f = Frame { origin: full.center() - size * 0.5, s };
-    ui.painter().rect_filled(full, CornerRadius::ZERO, BG);
+    tolex(ui.painter(), full);
     let infos = ctx.params().param_infos();
     header(ui, ctx, &f, &infos);
     harp(ui, ctx, &f);
@@ -323,12 +467,31 @@ pub fn velvet_ui(ui: &mut egui::Ui, ctx: &Ctx) {
     ui.ctx().request_repaint_after(std::time::Duration::from_millis(33));
 }
 
+/// Black tolex: near-black with a faint pebble grain.
+fn tolex(pt: &egui::Painter, r: Rect) {
+    pt.rect_filled(r, CornerRadius::ZERO, TOLEX);
+    let mut m = Mesh::default();
+    let cell = 3.0;
+    let (nx, ny) = ((r.width() / cell) as u32, (r.height() / cell) as u32);
+    for j in 0..ny {
+        for i in 0..nx {
+            let h = hash(i.wrapping_mul(73_856_093) ^ j.wrapping_mul(19_349_663));
+            if h > 0.72 {
+                let a = ((h - 0.72) * 40.0) as u8;
+                let p = r.left_top() + vec2(i as f32 * cell, j as f32 * cell);
+                let c = Color32::from_rgba_unmultiplied(255, 255, 255, a);
+                quad(&mut m, Rect::from_min_size(p, vec2(1.5, 1.5)), c, c, c, c);
+            }
+        }
+    }
+    pt.add(Shape::mesh(m));
+}
+
 fn header(ui: &mut egui::Ui, ctx: &Ctx, f: &Frame, infos: &[ParamInfo]) {
     let sh = &ctx.params().ui;
     {
         let pt = ui.painter();
-        pt.rect_filled(f.r(0.0, 0.0, WINDOW_W as f32, 52.0), CornerRadius::ZERO, mix(BG, PANEL, 0.5));
-        pt.line_segment([f.p(0.0, 52.0), f.p(WINDOW_W as f32, 52.0)], Stroke::new(f.len(1.0), LINE));
+        pt.line_segment([f.p(0.0, 52.0), f.p(WINDOW_W as f32, 52.0)], Stroke::new(f.len(1.0), Color32::from_rgb(40, 40, 43)));
         pt.text(f.p(20.0, 26.0), Align2::LEFT_CENTER, "VELVET", FontId::proportional(20.0 * f.s), TEXT);
         pt.text(f.p(102.0, 26.0), Align2::LEFT_CENTER, "73", FontId::proportional(20.0 * f.s), AMBER);
         pt.text(f.p(138.0, 20.0), Align2::LEFT_CENTER, "Mark I Stage 73 · Twin Reverb", f.font(9.5), TEXT_DIM);
@@ -369,26 +532,8 @@ fn header(ui: &mut egui::Ui, ctx: &Ctx, f: &Frame, infos: &[ParamInfo]) {
     let sus = sh.sustain.load(Ordering::Relaxed) != 0;
     {
         let pt = ui.painter();
-        let lamp = f.r(778.0, 21.0, 9.0, 9.0);
-        pt.rect_filled(lamp, CornerRadius::same((1.0 * f.s) as u8), if sus { AMBER } else { TRACK });
-        pt.text(f.p(794.0, 26.0), Align2::LEFT_CENTER, "PEDAL", f.font(9.5), if sus { TEXT } else { TEXT_DIM });
-    }
-    // Output meter.
-    let m = ctx.get_meter(P::MeterL).clamp(0.0, 1.0);
-    let mr = f.r(870.0, 22.0, 180.0, 8.0);
-    {
-        let pt = ui.painter();
-        pt.rect_filled(mr, CornerRadius::ZERO, WELL);
-        let db = 20.0 * m.max(1e-6).log10();
-        let frac = ((db + 48.0) / 48.0).clamp(0.0, 1.0);
-        let mut fill = mr;
-        fill.set_width(mr.width() * frac);
-        pt.rect_filled(fill, CornerRadius::ZERO, if db > -1.5 { RED } else if db > -9.0 { AMBER } else { TEAL });
-        for k in 1..8 {
-            let xx = mr.left() + mr.width() * k as f32 / 8.0;
-            pt.line_segment([pos2(xx, mr.top()), pos2(xx, mr.bottom())], Stroke::new(f.len(1.0), BG));
-        }
-        pt.text(pos2(mr.left() - f.len(8.0), mr.center().y), Align2::RIGHT_CENTER, "OUT", f.font(9.0), TEXT_DIM);
+        jewel(pt, f, f.p(990.0, 26.0), sus, AMBER);
+        pt.text(f.p(1003.0, 26.0), Align2::LEFT_CENTER, "PEDAL", f.font(9.5), if sus { TEXT } else { TEXT_DIM });
     }
     // Hush: everything to silence.
     let r = f.r(1074.0, 12.0, 86.0, 28.0);
@@ -453,11 +598,11 @@ fn piano_panel(ui: &mut egui::Ui, ctx: &Ctx, f: &Frame) {
     knob(ui, ctx, f, P::Condition, "Condition", x + 226.0, y + 236.0, 26.0, a);
     knob(ui, ctx, f, P::A4, "Tuning", x + 372.0, y + 236.0, 26.0, a);
     let pt = ui.painter();
-    pt.line_segment([f.p(x + 14.0, y + 304.0), f.p(x + w - 14.0, y + 304.0)], Stroke::new(f.len(1.0), LINE));
-    pt.text(f.p(x + 16.0, y + 336.0), Align2::LEFT_CENTER, "KEYS", f.font(9.5), TEXT_DIM);
+    groove(pt, f.p(x + 14.0, y + 304.0), f.p(x + w - 14.0, y + 304.0));
+    pt.text(f.p(x + 16.0, y + 336.0), Align2::LEFT_CENTER, "KEYS", f.font(9.5), INK);
     segmented(ui, ctx, f, P::Keys, &["73", "88"], x + 56.0, y + 324.0, 120.0, 24.0, a);
     toggle(ui, ctx, f, P::Stretch, "Stretch tuning", x + 196.0, y + 324.0, 130.0, a);
-    ui.painter().text(f.p(x + w - 16.0, y + 336.0), Align2::RIGHT_CENTER, "CC64 pedal", f.font(9.0), TEXT_DIM);
+    ui.painter().text(f.p(x + w - 16.0, y + 336.0), Align2::RIGHT_CENTER, "CC64 pedal", f.font(9.0), INK_DIM);
 }
 
 fn stage_panel(ui: &mut egui::Ui, ctx: &Ctx, f: &Frame) {
@@ -468,7 +613,7 @@ fn stage_panel(ui: &mut egui::Ui, ctx: &Ctx, f: &Frame) {
     knob(ui, ctx, f, P::BassBoost, "Bass Boost", x + 172.0, y + 104.0, 34.0, a);
     knob(ui, ctx, f, P::Harp, "Harp", x + 64.0, y + 236.0, 26.0, a);
     knob(ui, ctx, f, P::Cable, "Cable", x + 172.0, y + 236.0, 26.0, a);
-    ui.painter().line_segment([f.p(x + 14.0, y + 304.0), f.p(x + w - 14.0, y + 304.0)], Stroke::new(f.len(1.0), LINE));
+    groove(ui.painter(), f.p(x + 14.0, y + 304.0), f.p(x + w - 14.0, y + 304.0));
     segmented(ui, ctx, f, P::Board, &["Original", "Modded", "Direct"], x + 14.0, y + 324.0, 208.0, 24.0, a);
 }
 
@@ -490,7 +635,7 @@ fn twin_panel(ui: &mut egui::Ui, ctx: &Ctx, f: &Frame) {
     knob(ui, ctx, f, P::Mic, "Mic", x + 56.0 + 2.0 * step, row2, r, a);
     knob(ui, ctx, f, P::Noise, "Noise", x + 56.0 + 3.0 * step, row2, r, a);
     knob(ui, ctx, f, P::Output, "Output", x + 56.0 + 4.0 * step, row2, r, a);
-    ui.painter().line_segment([f.p(x + 14.0, y + 304.0), f.p(x + w - 14.0, y + 304.0)], Stroke::new(f.len(1.0), LINE));
+    groove(ui.painter(), f.p(x + 14.0, y + 304.0), f.p(x + w - 14.0, y + 304.0));
     segmented(ui, ctx, f, P::Amp, &["Twin", "Line", "DI"], x + 16.0, y + 324.0, 210.0, 24.0, a);
     toggle(ui, ctx, f, P::Bright, "Bright", x + 300.0, y + 324.0, 118.0, a);
 }

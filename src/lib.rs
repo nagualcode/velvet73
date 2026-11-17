@@ -13,7 +13,6 @@ pub mod ui;
 use dsp::KEYS;
 use dsp::engine::{Controls, Engine};
 use params::VelvetParams;
-use params::VelvetParamsParamId as P;
 use params::{UiShared, store_f32};
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -112,7 +111,7 @@ impl PluginLogic for Velvet {
         state.tail
     }
 
-    fn process(state: &mut Self::DspState, params: &Self::Params, buffer: &mut AudioBuffer, events: &EventList, context: &mut ProcessContext) -> ProcessStatus {
+    fn process(state: &mut Self::DspState, params: &Self::Params, buffer: &mut AudioBuffer, events: &EventList, _context: &mut ProcessContext) -> ProcessStatus {
         let _ftz = denormals::NoDenormals::new();
         let n = buffer.num_samples();
         if n == 0 || state.engine.is_none() {
@@ -123,7 +122,6 @@ impl PluginLogic for Velvet {
         let n_out = buffer.num_output_channels();
         let mut ev = 0;
         let mut done = 0;
-        let mut peak = 0.0f32;
         while done < n {
             while let Some(e) = events.get(ev) {
                 if e.sample_offset as usize > done {
@@ -140,17 +138,12 @@ impl PluginLogic for Velvet {
             let len = end - done;
             let engine = state.engine.as_mut().expect("engine");
             engine.process(&c, &mut state.mono[..len]);
-            for k in 0..len {
-                peak = peak.max(state.mono[k].abs());
-            }
             for ch in 0..n_out.min(2) {
                 buffer.output(ch)[done..end].copy_from_slice(&state.mono[..len]);
             }
             done = end;
         }
         Self::publish(state, &params.ui);
-        context.set_meter(P::MeterL, peak.min(1.0));
-        context.set_meter(P::MeterR, peak.min(1.0));
         ProcessStatus::Normal
     }
 

@@ -1,6 +1,7 @@
 use super::*;
 use crate::dsp::engine::Engine;
 use crate::params::controls_from_preset;
+use crate::params::VelvetParamsParamId as P;
 use std::time::Duration;
 use truce_test::{InputSource, assert_no_audio_alloc, assertions, driver};
 
@@ -272,4 +273,35 @@ fn harder_playing_barks() {
     let soft = ratio(0.25);
     let hard = ratio(0.9);
     assert!(hard > soft + 10.0, "2nd harmonic re fundamental: pp {soft:.1} dB, ff {hard:.1} dB");
+}
+
+/// A key held down (damper lifted, no pedal) catches the blow of another
+/// key through the harp rail; a key at rest does not.
+#[test]
+fn a_held_key_catches_the_rail() {
+    let c = Controls::default();
+    let fs = 48_000.0;
+    let run = |hold: bool, strike: bool| -> f32 {
+        let mut out = vec![0.0f32; 256];
+        let mut e = Engine::new(fs, SERIAL);
+        if hold {
+            // F5 pressed softly and held while it rings down.
+            e.note_on(77, 0.02, &c);
+            for _ in 0..(fs as usize * 4 / 256) {
+                e.process(&c, &mut out);
+            }
+        }
+        if strike {
+            e.note_on(65, 1.0, &c); // F4, hard
+        }
+        for _ in 0..40 {
+            e.process(&c, &mut out);
+        }
+        e.tip_mm(77)
+    };
+    let held = (run(true, true) - run(true, false)).abs();
+    let rest = run(false, true);
+    eprintln!("F5 tip change from an F4 blow: held {held:.4} mm (of {:.4}), at rest {rest:.6} mm", run(true, false));
+    assert!(held > 1e-3, "held key did not ring: {held}");
+    assert!(rest < 1e-6, "damped key rang: {rest}");
 }

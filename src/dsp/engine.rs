@@ -160,7 +160,7 @@ impl Engine {
         // travel a longer escapement and the long tines swing wide; the
         // per-register scale keeps the tip excursion within the ±6 mm a
         // real harp allows [DESIGN, docs/CIRCUIT.md §1].
-        let p = 3.0 - 2.0 * c.touch;
+        let p = 3.5 - 2.0 * c.touch;
         let v = &mut self.voices[k - 1];
         let reg = ((v.km.f0 / 196.0).powf(0.8) as f32).clamp(0.45, 1.3);
         let v0 = (0.1 + 1.5 * vel.clamp(0.0, 1.0).powf(p)) * reg;
@@ -168,14 +168,13 @@ impl Engine {
         v.strike(v0);
         let pos = v.km.harp_pos;
         let push = v.km.hammer_mass as f32 * v0;
-        // Sustain pedal down: the blow travels along the harp rail and
-        // nudges every free tine (the "halo" of a pedalled chord).
-        if self.sustain {
-            for (i, o) in self.voices.iter_mut().enumerate() {
-                if i != k - 1 && !o.damped() {
-                    let d = (o.km.harp_pos - pos).abs();
-                    o.kick(0.0025 * push * (-d / 0.25).exp());
-                }
+        // The blow travels along the harp rail and nudges every free tine:
+        // all of them under the sustain pedal (the "halo" of a pedalled
+        // chord), or just the keys held down, whose dampers are lifted too.
+        for (i, o) in self.voices.iter_mut().enumerate() {
+            if i != k - 1 && !o.damped() {
+                let d = (o.km.harp_pos - pos).abs();
+                o.kick(0.0025 * push * (-d / 0.25).exp());
             }
         }
         self.asleep = false;

@@ -1,6 +1,6 @@
 [package]
 name = "velvet73"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 description = "Velvet73: a Rhodes Mark I Stage piano and its Fender Twin Reverb, modelled from the tine up"
 authors = ["Jardim Sonoro", "nagualcode"]
