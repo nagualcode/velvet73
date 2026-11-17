@@ -538,6 +538,9 @@ fn header(ui: &mut egui::Ui, ctx: &Ctx, f: &Frame, infos: &[ParamInfo]) {
         let c = pos2(mid.right() - f.len(14.0), mid.center().y);
         pt.add(Shape::convex_polygon(vec![c + vec2(-f.len(4.0), -f.len(2.0)), c + vec2(f.len(4.0), -f.len(2.0)), c + vec2(0.0, f.len(3.0))], TEXT_DIM, Stroke::NONE));
     }
+    // What MOD (CC 1) does: hold the pedal, or turn the Leslie.
+    ui.painter().text(f.p(842.0, 26.0), Align2::RIGHT_CENTER, "MOD", f.font(9.5), TEXT_DIM);
+    segmented(ui, ctx, f, P::ModTarget, &["Pedal", "Rotor"], 852.0, 14.0, 168.0, 24.0, AMBER);
     // Sustain pedal lamp.
     let sus = sh.sustain.load(Ordering::Relaxed) != 0;
     {
@@ -602,7 +605,7 @@ fn piano_panel(ui: &mut egui::Ui, ctx: &Ctx, f: &Frame) {
     pt.text(f.p(x + 16.0, y + 336.0), Align2::LEFT_CENTER, "KEYS", f.font(9.5), INK);
     segmented(ui, ctx, f, P::Keys, &["73", "88"], x + 56.0, y + 324.0, 120.0, 24.0, a);
     toggle(ui, ctx, f, P::Stretch, "Stretch tuning", x + 196.0, y + 324.0, 130.0, a);
-    ui.painter().text(f.p(x + w - 16.0, y + 336.0), Align2::RIGHT_CENTER, "CC64 pedal", f.font(9.0), INK_DIM);
+    ui.painter().text(f.p(x + w - 16.0, y + 336.0), Align2::RIGHT_CENTER, "Pedal: CC64 or MOD", f.font(9.0), INK_DIM);
 }
 
 fn stage_panel(ui: &mut egui::Ui, ctx: &Ctx, f: &Frame) {
@@ -644,7 +647,8 @@ fn twin_panel(ui: &mut egui::Ui, ctx: &Ctx, f: &Frame) {
     groove(ui.painter(), f.p(x + 14.0, y + 304.0), f.p(x + w - 14.0, y + 304.0));
     segmented(ui, ctx, f, P::Amp, &["Twin", "Line", "DI", "Leslie"], x + 16.0, y + 324.0, 272.0, 24.0, a);
     if leslie {
-        ui.painter().text(f.p(x + w - 18.0, y + 336.0), Align2::RIGHT_CENTER, "CC1 wheel: slow / fast", f.font(9.0), INK_DIM);
+        let hint = if enum_index(ctx, P::ModTarget, 2) == 1 { "MOD: slow / fast" } else { "MOD is the pedal (top)" };
+        ui.painter().text(f.p(x + w - 18.0, y + 336.0), Align2::RIGHT_CENTER, hint, f.font(9.0), INK_DIM);
     } else {
         toggle(ui, ctx, f, P::Bright, "Bright", x + 304.0, y + 324.0, 114.0, a);
     }

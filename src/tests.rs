@@ -190,6 +190,7 @@ fn the_leslie_is_stereo_and_follows_the_wheel() {
         .duration(Duration::from_millis(3000))
         .script(|s| {
             s.set_param(P::Amp, 3.0);
+            s.set_param(P::ModTarget, 1.0); // MOD turns the rotor
             s.cc(64, 1.0);
             for n in [41, 52, 55, 57, 60] {
                 s.note_on(n, 0.8);
@@ -345,4 +346,33 @@ fn a_held_key_catches_the_rail() {
     eprintln!("F5 tip change from an F4 blow: held {held:.4} mm (of {:.4}), at rest {rest:.6} mm", run(true, false));
     assert!(held > 1e-3, "held key did not ring: {held}");
     assert!(rest < 1e-6, "damped key rang: {rest}");
+}
+
+/// MOD (CC 1) held is the sustain pedal by default: a released chord keeps
+/// ringing while MOD is down, and is damped when MOD comes up.
+#[test]
+fn mod_holds_the_pedal() {
+    let r = driver!(Plugin)
+        .sample_rate(48_000.0)
+        .block_size(128)
+        .duration(Duration::from_millis(2000))
+        .script(|s| {
+            s.cc(1, 1.0);
+            for n in [52, 55, 60] {
+                s.note_on(n, 0.8);
+            }
+            s.wait_ms(200);
+            for n in [52, 55, 60] {
+                s.note_off(n);
+            }
+            s.wait_ms(800); // released at 0.2 s, still held by MOD
+            s.cc(1, 0.0);
+            s.wait_ms(990);
+        })
+        .run();
+    let sr = 48_000;
+    let held = rms(&r.output[0][sr * 8 / 10..sr * 9 / 10]);
+    let after = rms(&r.output[0][sr * 15 / 10..sr * 16 / 10]);
+    assert!(held > 0.01, "MOD did not hold the chord: {held}");
+    assert!(after < held * 0.1, "MOD up did not damp: {held} -> {after}");
 }

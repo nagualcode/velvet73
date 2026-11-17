@@ -37,6 +37,12 @@ pub enum AmpP {
 }
 
 #[derive(ParamEnum)]
+pub enum ModP {
+    Pedal,
+    Rotor,
+}
+
+#[derive(ParamEnum)]
 pub enum RotorP {
     Slow,
     Fast,
@@ -122,6 +128,11 @@ pub struct VelvetParams {
     /// Angle between the two microphones: 0° is mono.
     #[param(name = "Mic Width", short_name = "Width", group = "Leslie", range = "linear(0, 180)", default = 120.0, format = "fmt_deg")]
     pub leslie_width: FloatParam,
+
+    /// What the MOD control (CC 1) does: hold the sustain pedal (for
+    /// keyboards with no pedal) or switch the Leslie slow/fast.
+    #[param(name = "MOD", group = "MIDI", default = 0)]
+    pub mod_target: EnumParam<ModP>,
 
     /// Hum and hiss, as built (100 %).
     #[param(name = "Noise", group = "Amp", range = "linear(0, 1.5)", default = 1.0, unit = "%")]

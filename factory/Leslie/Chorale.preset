@@ -2,7 +2,7 @@ uuid = "73b3ccf2-905a-510e-81e2-32411c0629aa"
 name = "Chorale"
 category = "Leslie"
 author = "Jardim Sonoro"
-comment = "The Stage into a 147 on slow. Ride the mod wheel for the fast rotor."
+comment = "The Stage into a 147 on slow. Set MOD to Rotor and the mod wheel brings the fast rotor in."
 
 [params]
 voicing = 0.45
