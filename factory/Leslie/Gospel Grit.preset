@@ -1,0 +1,36 @@
+uuid = "0c3f66d9-16e7-56fa-b7d4-63ccc9b94acd"
+name = "Gospel Grit"
+category = "Leslie"
+author = "Jardim Sonoro"
+comment = "Fast rotor, the preamp pushed into the 147, horn forward. Lean on it."
+
+[params]
+voicing = 0.55
+gap = 1.6
+hammer = 1.0
+touch = 0.5
+condition = 0.15
+a4 = 440.0
+stretch = 1
+keys = 0
+stage_volume = 1.0
+bass_boost = 0.8
+harp = 0.5
+cable = 5.0
+board = 0
+amp = 3
+amp_volume = 4.0
+treble = 5.5
+middle = 4.5
+bass = 5.0
+bright = 0
+reverb = 3.0
+speed = 4.5
+intensity = 1.0
+mic = 0.35
+noise = 1.0
+output = -15.0
+rotor = 1
+leslie_drive = 6.0
+leslie_balance = 0.3
+leslie_width = 150.0

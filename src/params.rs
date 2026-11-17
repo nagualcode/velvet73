@@ -4,6 +4,7 @@
 use crate::dsp::KEYS;
 use crate::dsp::amp::AmpKnobs;
 use crate::dsp::engine::{AmpMode, Controls};
+use crate::dsp::leslie::{LeslieKnobs, Rotor};
 use crate::dsp::stage::Board;
 use std::sync::atomic::{AtomicU32, Ordering};
 use truce::prelude::*;
@@ -31,7 +32,19 @@ pub enum AmpP {
     TwinLine,
     #[name = "DI"]
     Di,
+    #[name = "Leslie"]
+    Leslie,
 }
+
+#[derive(ParamEnum)]
+pub enum RotorP {
+    Slow,
+    Fast,
+    Stop,
+}
+
+const AMPS: [AmpMode; 4] = [AmpMode::Twin, AmpMode::TwinLine, AmpMode::Di, AmpMode::Leslie];
+const ROTORS: [Rotor; 3] = [Rotor::Slow, Rotor::Fast, Rotor::Stop];
 
 #[derive(Params)]
 pub struct VelvetParams {
@@ -96,15 +109,26 @@ pub struct VelvetParams {
     /// Microphone from the dust cap (bright) to the cone edge (dark).
     #[param(name = "Mic", group = "Amp", range = "linear(0, 1)", default = 0.35, format = "fmt_mic")]
     pub mic: FloatParam,
+    // ---- the Leslie --------------------------------------------------
+    /// Chorale, tremolo, or motors off (also the mod wheel, CC 1).
+    #[param(name = "Rotor", group = "Leslie", default = 0)]
+    pub rotor: EnumParam<RotorP>,
+    /// The combo preamp's level into the 147: higher breaks up.
+    #[param(name = "Leslie Drive", short_name = "Drive", group = "Leslie", range = "linear(1, 10)", default = 4.0, format = "fmt_dial")]
+    pub leslie_drive: FloatParam,
+    /// Horn against drum.
+    #[param(name = "Horn/Drum", group = "Leslie", range = "linear(-1, 1)", default = 0.0, format = "fmt_balance")]
+    pub leslie_balance: FloatParam,
+    /// Angle between the two microphones: 0° is mono.
+    #[param(name = "Mic Width", short_name = "Width", group = "Leslie", range = "linear(0, 180)", default = 120.0, format = "fmt_deg")]
+    pub leslie_width: FloatParam,
+
     /// Hum and hiss, as built (100 %).
     #[param(name = "Noise", group = "Amp", range = "linear(0, 1.5)", default = 1.0, unit = "%")]
     pub noise: FloatParam,
     #[param(name = "Output", group = "Amp", range = "linear(-24, 12)", default = 0.0, unit = "dB")]
     pub output: FloatParam,
 
-    /// Momentary: rising edge = panic (also MIDI CC 120).
-    #[param(name = "Panic", default = 0)]
-    pub panic: BoolParam,
 
     #[skip]
     pub ui: UiShared,
@@ -159,6 +183,19 @@ impl VelvetParams {
     pub fn fmt_dial(&self, v: f64) -> String {
         format!("{v:.1}")
     }
+    pub fn fmt_balance(&self, v: f64) -> String {
+        let p = (v.abs() * 100.0).round();
+        if p < 3.0 {
+            "Even".into()
+        } else if v > 0.0 {
+            format!("Horn {p:.0}%")
+        } else {
+            format!("Drum {p:.0}%")
+        }
+    }
+    pub fn fmt_deg(&self, v: f64) -> String {
+        format!("{v:.0}°")
+    }
     pub fn fmt_mic(&self, v: f64) -> String {
         if v < 0.33 {
             "Cap".into()
@@ -184,7 +221,7 @@ impl VelvetParams {
             harp_h: self.harp.value(),
             cable_m: self.cable.value(),
             board: [Board::Original, Board::Modded, Board::Direct][self.board.value().to_index().min(2)],
-            amp: [AmpMode::Twin, AmpMode::TwinLine, AmpMode::Di][self.amp.value().to_index().min(2)],
+            amp: AMPS[self.amp.value().to_index().min(3)],
             knobs: AmpKnobs {
                 volume: dial(self.amp_volume.value()),
                 treble: dial(self.treble.value()),
@@ -194,6 +231,12 @@ impl VelvetParams {
                 reverb: dial(self.reverb.value()),
                 speed: dial(self.speed.value()),
                 intensity: dial(self.intensity.value()),
+            },
+            leslie: LeslieKnobs {
+                rotor: ROTORS[self.rotor.value().to_index().min(2)],
+                drive: dial(self.leslie_drive.value()),
+                balance: self.leslie_balance.value(),
+                width: self.leslie_width.value(),
             },
             mic: self.mic.value(),
             noise: self.noise.value(),
@@ -221,7 +264,11 @@ pub fn set_named(c: &mut Controls, key: &str, v: f64) -> bool {
         "harp" => c.harp_h = f,
         "cable" => c.cable_m = f,
         "board" => c.board = [Board::Original, Board::Modded, Board::Direct][idx.min(2)],
-        "amp" => c.amp = [AmpMode::Twin, AmpMode::TwinLine, AmpMode::Di][idx.min(2)],
+        "amp" => c.amp = AMPS[idx.min(3)],
+        "rotor" => c.leslie.rotor = ROTORS[idx.min(2)],
+        "leslie_drive" => c.leslie.drive = dial(f),
+        "leslie_balance" => c.leslie.balance = f,
+        "leslie_width" => c.leslie.width = f,
         "amp_volume" => c.knobs.volume = dial(f),
         "treble" => c.knobs.treble = dial(f),
         "middle" => c.knobs.middle = dial(f),
@@ -233,7 +280,6 @@ pub fn set_named(c: &mut Controls, key: &str, v: f64) -> bool {
         "mic" => c.mic = f,
         "noise" => c.noise = f,
         "output" => c.output_db = f,
-        "panic" => {}
         _ => return false,
     }
     true
@@ -266,7 +312,12 @@ pub struct UiShared {
     /// Tine tip excursion per key, mm.
     pub level: [AtomicU32; KEYS],
     pub sustain: AtomicU32,
-    pub panic: AtomicU32,
+    /// The Leslie as it turns: horn and drum angles (rad), and the rotor
+    /// setting in force (0 slow, 1 fast, 2 stop; the mod wheel can
+    /// override the parameter).
+    pub horn: AtomicU32,
+    pub drum: AtomicU32,
+    pub rotor: AtomicU32,
     /// Bumped by the editor when it loads a preset: voices reset.
     pub preset_epoch: AtomicU32,
 }
@@ -276,7 +327,9 @@ impl Default for UiShared {
         Self {
             level: std::array::from_fn(|_| AtomicU32::new(0)),
             sustain: AtomicU32::new(0),
-            panic: AtomicU32::new(0),
+            horn: AtomicU32::new(0),
+            drum: AtomicU32::new(0),
+            rotor: AtomicU32::new(0),
             preset_epoch: AtomicU32::new(0),
         }
     }

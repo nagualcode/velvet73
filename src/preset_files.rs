@@ -7,6 +7,8 @@ const FILES: &[&str] = &[
     include_str!("../factory/Twin/Pushed Twin.preset"),
     include_str!("../factory/Twin/Spring Wash.preset"),
     include_str!("../factory/Twin/Vibrato Channel.preset"),
+    include_str!("../factory/Leslie/Chorale.preset"),
+    include_str!("../factory/Leslie/Gospel Grit.preset"),
     include_str!("../factory/Studio/DI Console.preset"),
     include_str!("../factory/Studio/Modded Stage.preset"),
     include_str!("../factory/Studio/Twin Line Out.preset"),

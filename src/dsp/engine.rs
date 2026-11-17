@@ -1,9 +1,11 @@
 //! The whole instrument: 88 tone generators (73 playable on the Stage
-//! 73), the harp, the nameboard, the Twin (or a DI), cabinet and mic.
+//! 73), the harp, the nameboard, the Twin (or a DI, or a Leslie), cabinet
+//! and mic.
 
 use super::amp::{AmpKnobs, Twin};
 use super::cab::Cab;
 use super::keys::{Regulation, Unit};
+use super::leslie::{Leslie, LeslieKnobs, LesliePower};
 use super::resample::{Decimator, factor_for};
 use super::stage::{Board, Nameboard};
 use super::voice::Voice;
@@ -19,6 +21,8 @@ pub enum AmpMode {
     TwinLine,
     /// Straight into the console through a DI.
     Di,
+    /// A Leslie 147 with two microphones (stereo).
+    Leslie,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -41,6 +45,7 @@ pub struct Controls {
     // Amp.
     pub amp: AmpMode,
     pub knobs: AmpKnobs,
+    pub leslie: LeslieKnobs,
     pub mic: f32,
     pub noise: f32,
     pub output_db: f32,
@@ -64,6 +69,7 @@ impl Default for Controls {
             board: Board::Original,
             amp: AmpMode::Twin,
             knobs: AmpKnobs { volume: 0.4, treble: 0.5, middle: 0.4, bass: 0.45, bright: false, reverb: 0.22, speed: 0.4, intensity: 0.0 },
+            leslie: LeslieKnobs::default(),
             mic: 0.35,
             noise: 1.0,
             output_db: 0.0,
@@ -84,8 +90,14 @@ pub struct Engine {
     nameboard: Nameboard,
     twin: Twin,
     cab: Cab,
+    leslie_power: LesliePower,
+    pub leslie: Leslie,
     dec: Decimator,
     dc: HighPass,
+    dc_r: HighPass,
+    /// Decimated speaker-line signal and the right channel, host rate.
+    line: Vec<f32>,
+    right: Vec<f32>,
     harp: Vec<f32>,
     over: Vec<f32>,
     sustain: bool,
@@ -119,8 +131,13 @@ impl Engine {
             nameboard: Nameboard::new(fs),
             twin: Twin::new(fs),
             cab: Cab::new(host),
+            leslie_power: LesliePower::new(fs),
+            leslie: Leslie::new(host),
             dec: Decimator::new(factor),
             dc: HighPass::new(10.0, host),
+            dc_r: HighPass::new(10.0, host),
+            line: vec![0.0; MAX_CHUNK],
+            right: vec![0.0; MAX_CHUNK],
             harp: vec![0.0; MAX_CHUNK * 2],
             over: vec![0.0; MAX_CHUNK * 2],
             sustain: false,
@@ -220,8 +237,11 @@ impl Engine {
         self.nameboard.clear();
         self.twin.clear();
         self.cab.clear();
+        self.leslie_power.clear();
+        self.leslie.clear();
         self.dec.reset();
         self.dc.clear();
+        self.dc_r.clear();
         self.levels = [0.0; KEYS];
     }
 
@@ -253,22 +273,45 @@ impl Engine {
         self.cab.set_mic(c.mic);
     }
 
-    /// Host-rate mono output.
+    /// Host-rate mono output (the Leslie's two microphones summed).
     pub fn process(&mut self, c: &Controls, out: &mut [f32]) {
         let mut done = 0;
         while done < out.len() {
             let len = (out.len() - done).min(MAX_CHUNK);
-            self.chunk(c, &mut out[done..done + len]);
+            let mut right = std::mem::take(&mut self.right);
+            self.chunk(c, &mut out[done..done + len], &mut right[..len]);
+            if c.amp == AmpMode::Leslie {
+                for (o, r) in out[done..done + len].iter_mut().zip(&right[..len]) {
+                    *o = 0.5 * (*o + r);
+                }
+            }
+            self.right = right;
             done += len;
         }
     }
 
-    fn chunk(&mut self, c: &Controls, out: &mut [f32]) {
+    /// Host-rate stereo output. Only the Leslie is stereo; everything
+    /// else is the same signal on both sides.
+    pub fn process_stereo(&mut self, c: &Controls, left: &mut [f32], right: &mut [f32]) {
+        let mut done = 0;
+        while done < left.len() {
+            let len = (left.len() - done).min(MAX_CHUNK);
+            self.chunk(c, &mut left[done..done + len], &mut right[done..done + len]);
+            done += len;
+        }
+    }
+
+    fn chunk(&mut self, c: &Controls, out: &mut [f32], out_r: &mut [f32]) {
         let n = out.len();
         let ni = n * self.factor;
         let any = self.voices.iter().any(|v| v.active);
         if self.asleep && !any && c.noise <= 0.0 {
             out.fill(0.0);
+            out_r.fill(0.0);
+            // The rotors keep turning in silence.
+            if c.amp == AmpMode::Leslie {
+                self.leslie.spin(c.leslie.rotor, n);
+            }
             return;
         }
         self.update(c);
@@ -297,26 +340,47 @@ impl Engine {
             self.over[i] = match c.amp {
                 AmpMode::Twin | AmpMode::TwinLine => self.twin.run(jack, c.noise),
                 AmpMode::Di => jack,
+                AmpMode::Leslie => self.leslie_power.run(jack, c.leslie.drive, c.noise),
             };
             self.probe[0] = self.probe[0].max(jack.abs());
             self.probe[1] = self.probe[1].max(self.over[i].abs());
         }
+        for j in 0..n {
+            self.line[j] = self.dec.process(&self.over[j * self.factor..(j + 1) * self.factor]);
+        }
+        if c.amp == AmpMode::Leslie {
+            self.leslie.run_block(&c.leslie, &self.line[..n], out, out_r);
+        } else {
+            for j in 0..n {
+                let x = self.line[j];
+                out[j] = match c.amp {
+                    // Speaker volts → full scale at ~16 V across the voice coil.
+                    AmpMode::Twin => self.cab.run(x) * (1.0 / 20.0),
+                    AmpMode::TwinLine => x * (1.0 / 25.0),
+                    // Console line: the DI's ~+12 dB.
+                    _ => x * 2.0,
+                };
+            }
+        }
+        let stereo = c.amp == AmpMode::Leslie;
+        let leslie_trim = 1.0 / 24.0;
         let mut loud = 0.0f32;
-        for (j, o) in out.iter_mut().enumerate() {
-            let x = self.dec.process(&self.over[j * self.factor..(j + 1) * self.factor]);
-            let y = match c.amp {
-                // Speaker volts → full scale at ~16 V across the voice coil.
-                AmpMode::Twin => self.cab.run(x) * (1.0 / 20.0),
-                AmpMode::TwinLine => x * (1.0 / 25.0),
-                // Console line: the DI's ~+12 dB.
-                AmpMode::Di => x * 2.0,
-            };
-            let y = self.dc.run(y) * gain;
-            // Safety ceiling (the console, not the instrument): transparent
-            // below −1 dBFS.
-            let y = if y.abs() > 0.89 { y.signum() * (0.89 + 0.11 * ((y.abs() - 0.89) / 0.11).tanh()) } else { y };
-            loud = loud.max(y.abs());
-            *o = y;
+        // Safety ceiling (the console, not the instrument): transparent
+        // below −1 dBFS.
+        let ceil = |y: f32| if y.abs() > 0.89 { y.signum() * (0.89 + 0.11 * ((y.abs() - 0.89) / 0.11).tanh()) } else { y };
+        for j in 0..n {
+            if stereo {
+                let l = ceil(self.dc.run(out[j] * leslie_trim) * gain);
+                let r = ceil(self.dc_r.run(out_r[j] * leslie_trim) * gain);
+                loud = loud.max(l.abs()).max(r.abs());
+                out[j] = l;
+                out_r[j] = r;
+            } else {
+                let y = ceil(self.dc.run(out[j]) * gain);
+                loud = loud.max(y.abs());
+                out[j] = y;
+                out_r[j] = y;
+            }
         }
         // Sleep: no tine moving, no noise, reverb drained, output silent.
         if !any && c.noise <= 0.0 && loud < 3e-6 {
@@ -324,6 +388,7 @@ impl Engine {
             if self.quiet as f64 > 0.5 * self.host {
                 self.asleep = true;
                 out.fill(0.0);
+                out_r.fill(0.0);
             }
         } else {
             self.quiet = 0;

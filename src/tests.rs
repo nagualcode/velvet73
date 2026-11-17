@@ -38,6 +38,16 @@ fn screenshots() {
     if let Some((px, w, h)) = editor.screenshot(params.clone()) {
         truce_test::save_png(std::path::Path::new("docs/screenshot.png"), &px, w, h);
     }
+    // The same piano into the Leslie, horn and drum caught mid-turn.
+    params.set_plain(P::Amp.into(), 3.0);
+    params.set_plain(P::Rotor.into(), 1.0);
+    store_f32(&ui.horn, 2.4);
+    store_f32(&ui.drum, 0.7);
+    ui.rotor.store(1, Ordering::Relaxed);
+    let mut editor = Velvet::editor(params.clone());
+    if let Some((px, w, h)) = editor.screenshot(params.clone()) {
+        truce_test::save_png(std::path::Path::new("docs/screenshot-leslie.png"), &px, w, h);
+    }
 }
 
 fn rms(x: &[f32]) -> f32 {
@@ -126,10 +136,8 @@ fn panic_silences_everything_at_once() {
                 s.note_on(n, 1.0);
             }
             s.wait_ms(1000);
-            s.set_param(P::Panic, 1.0);
-            s.wait_ms(20);
-            s.set_param(P::Panic, 0.0);
-            s.wait_ms(560);
+            s.cc(120, 0.0); // All Sound Off
+            s.wait_ms(580);
         })
         .run();
     assertions::assert_no_nans(&r);
@@ -161,9 +169,42 @@ fn process_is_allocation_free() {
                 s.wait_ms(40);
                 s.cc(64, 0.0);
                 s.note_off(60);
+                s.set_param(P::Amp, 3.0); // the Leslie (the driver writes plain values)
+                s.cc(1, 1.0);
+                s.note_on(64, 0.8);
+                s.set_param(P::LeslieWidth, 0.2);
+                s.wait_ms(20);
             })
             .run()
     });
+}
+
+/// The Leslie: stereo (the two microphones differ), the mod wheel takes
+/// the rotor to fast and back, and nothing runs away.
+#[test]
+fn the_leslie_is_stereo_and_follows_the_wheel() {
+    let r = driver!(Plugin)
+        .sample_rate(48_000.0)
+        .channels(2)
+        .block_size(128)
+        .duration(Duration::from_millis(3000))
+        .script(|s| {
+            s.set_param(P::Amp, 3.0);
+            s.cc(64, 1.0);
+            for n in [41, 52, 55, 57, 60] {
+                s.note_on(n, 0.8);
+            }
+            s.wait_ms(500);
+            s.cc(1, 1.0);
+        })
+        .run();
+    assertions::assert_no_nans(&r);
+    let (l, rr) = (&r.output[0], &r.output[1]);
+    let diff: f32 = l.iter().zip(rr).map(|(a, b)| (a - b) * (a - b)).sum::<f32>() / l.len() as f32;
+    let tot: f32 = l.iter().map(|a| a * a).sum::<f32>() / l.len() as f32;
+    assert!(diff > 0.01 * tot, "left and right are the same: {diff} vs {tot}");
+    let peak = l.iter().chain(rr).fold(0.0f32, |m, x| m.max(x.abs()));
+    assert!(peak < 1.0, "peak {peak}");
 }
 
 #[test]

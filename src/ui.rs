@@ -316,8 +316,14 @@ fn knob(ui: &mut egui::Ui, ctx: &Ctx, f: &Frame, id: P, label: &str, x: f32, y: 
 /// Segmented selector for an enum parameter: click a segment, or drag
 /// up/down one notch per step.
 fn segmented(ui: &mut egui::Ui, ctx: &Ctx, f: &Frame, id: P, labels: &[&str], x: f32, y: f32, w: f32, h: f32, accent: Color32) {
+    let cur = enum_index(ctx, id, labels.len());
+    segmented_shown(ui, ctx, f, id, labels, x, y, w, h, accent, cur);
+}
+
+/// As [`segmented`], lighting `cur` (which may differ from the parameter:
+/// the Leslie's rotor follows the mod wheel too).
+fn segmented_shown(ui: &mut egui::Ui, ctx: &Ctx, f: &Frame, id: P, labels: &[&str], x: f32, y: f32, w: f32, h: f32, accent: Color32, cur: usize) {
     let n = labels.len();
-    let cur = enum_index(ctx, id, n);
     let all = f.r(x, y, w, h);
     let resp_all = ui.interact(all, ui.id().with(("seg-drag", u32::from(id))), Sense::drag());
     let acc_id = resp_all.id.with("acc");
@@ -416,6 +422,10 @@ pub(crate) fn key_id(key: &str) -> Option<P> {
         "mic" => P::Mic,
         "noise" => P::Noise,
         "output" => P::Output,
+        "rotor" => P::Rotor,
+        "leslie_drive" => P::LeslieDrive,
+        "leslie_balance" => P::LeslieBalance,
+        "leslie_width" => P::LeslieWidth,
         _ => return None,
     })
 }
@@ -494,7 +504,7 @@ fn header(ui: &mut egui::Ui, ctx: &Ctx, f: &Frame, infos: &[ParamInfo]) {
         pt.line_segment([f.p(0.0, 52.0), f.p(WINDOW_W as f32, 52.0)], Stroke::new(f.len(1.0), Color32::from_rgb(40, 40, 43)));
         pt.text(f.p(20.0, 26.0), Align2::LEFT_CENTER, "VELVET", FontId::proportional(20.0 * f.s), TEXT);
         pt.text(f.p(102.0, 26.0), Align2::LEFT_CENTER, "73", FontId::proportional(20.0 * f.s), AMBER);
-        pt.text(f.p(138.0, 20.0), Align2::LEFT_CENTER, "Mark I Stage 73 · Twin Reverb", f.font(9.5), TEXT_DIM);
+        pt.text(f.p(138.0, 20.0), Align2::LEFT_CENTER, "Mark I Stage 73 · Twin Reverb · Leslie", f.font(9.5), TEXT_DIM);
         pt.text(f.p(138.0, 33.0), Align2::LEFT_CENTER, "Jardim Sonoro", f.font(9.0), mix(TEXT_DIM, BG, 0.3));
     }
     // Presets.
@@ -532,19 +542,9 @@ fn header(ui: &mut egui::Ui, ctx: &Ctx, f: &Frame, infos: &[ParamInfo]) {
     let sus = sh.sustain.load(Ordering::Relaxed) != 0;
     {
         let pt = ui.painter();
-        jewel(pt, f, f.p(990.0, 26.0), sus, AMBER);
-        pt.text(f.p(1003.0, 26.0), Align2::LEFT_CENTER, "PEDAL", f.font(9.5), if sus { TEXT } else { TEXT_DIM });
+        jewel(pt, f, f.p(1090.0, 26.0), sus, AMBER);
+        pt.text(f.p(1103.0, 26.0), Align2::LEFT_CENTER, "PEDAL", f.font(9.5), if sus { TEXT } else { TEXT_DIM });
     }
-    // Hush: everything to silence.
-    let r = f.r(1074.0, 12.0, 86.0, 28.0);
-    let resp = ui.interact(r, ui.id().with("hush"), Sense::click());
-    if resp.clicked() {
-        sh.panic.fetch_add(1, Ordering::Relaxed);
-    }
-    let pt = ui.painter();
-    pt.rect_filled(r, CornerRadius::same((2.0 * f.s) as u8), if resp.hovered() { mix(PANEL, RED, 0.45) } else { FIELD });
-    pt.rect_stroke(r, CornerRadius::same((2.0 * f.s) as u8), Stroke::new(f.len(1.0), mix(RED, LINE, 0.4)), StrokeKind::Inside);
-    pt.text(r.center(), Align2::CENTER_CENTER, "HUSH", f.font(10.0), if resp.hovered() { TEXT } else { RED });
 }
 
 /// The harp: one tine per key, its glow the tip excursion.
@@ -619,25 +619,94 @@ fn stage_panel(ui: &mut egui::Ui, ctx: &Ctx, f: &Frame) {
 
 fn twin_panel(ui: &mut egui::Ui, ctx: &Ctx, f: &Frame) {
     let (x, y, w, h) = (728.0, 194.0, 436.0, 372.0);
-    panel(ui.painter(), f, x, y, w, h, "Twin Reverb", "vibrato channel", BLUE);
     let a = BLUE;
+    let leslie = enum_index(ctx, P::Amp, 4) == 3;
+    if leslie {
+        panel(ui.painter(), f, x, y, w, h, "Leslie 147", "rotary speaker", a);
+        leslie_controls(ui, ctx, f, x, y);
+    } else {
+        panel(ui.painter(), f, x, y, w, h, "Twin Reverb", "vibrato channel", a);
+        let r = 24.0;
+        let step = 81.0;
+        let row1 = y + 104.0;
+        knob(ui, ctx, f, P::AmpVolume, "Volume", x + 56.0, row1, r, a);
+        knob(ui, ctx, f, P::Treble, "Treble", x + 56.0 + step, row1, r, a);
+        knob(ui, ctx, f, P::Middle, "Middle", x + 56.0 + 2.0 * step, row1, r, a);
+        knob(ui, ctx, f, P::Bass, "Bass", x + 56.0 + 3.0 * step, row1, r, a);
+        knob(ui, ctx, f, P::Reverb, "Reverb", x + 56.0 + 4.0 * step, row1, r, a);
+        let row2 = y + 236.0;
+        knob(ui, ctx, f, P::Speed, "Speed", x + 56.0, row2, r, a);
+        knob(ui, ctx, f, P::Intensity, "Intensity", x + 56.0 + step, row2, r, a);
+        knob(ui, ctx, f, P::Mic, "Mic", x + 56.0 + 2.0 * step, row2, r, a);
+        knob(ui, ctx, f, P::Noise, "Noise", x + 56.0 + 3.0 * step, row2, r, a);
+        knob(ui, ctx, f, P::Output, "Output", x + 56.0 + 4.0 * step, row2, r, a);
+    }
+    groove(ui.painter(), f.p(x + 14.0, y + 304.0), f.p(x + w - 14.0, y + 304.0));
+    segmented(ui, ctx, f, P::Amp, &["Twin", "Line", "DI", "Leslie"], x + 16.0, y + 324.0, 272.0, 24.0, a);
+    if leslie {
+        ui.painter().text(f.p(x + w - 18.0, y + 336.0), Align2::RIGHT_CENTER, "CC1 wheel: slow / fast", f.font(9.0), INK_DIM);
+    } else {
+        toggle(ui, ctx, f, P::Bright, "Bright", x + 304.0, y + 324.0, 114.0, a);
+    }
+}
+
+/// The Leslie: drive, balance, microphones, the rotor switch, and the two
+/// rotors seen from above, turning as they turn.
+fn leslie_controls(ui: &mut egui::Ui, ctx: &Ctx, f: &Frame, x: f32, y: f32) {
+    let a = BLUE;
+    let sh = &ctx.params().ui;
     let r = 24.0;
     let step = 81.0;
     let row1 = y + 104.0;
-    knob(ui, ctx, f, P::AmpVolume, "Volume", x + 56.0, row1, r, a);
-    knob(ui, ctx, f, P::Treble, "Treble", x + 56.0 + step, row1, r, a);
-    knob(ui, ctx, f, P::Middle, "Middle", x + 56.0 + 2.0 * step, row1, r, a);
-    knob(ui, ctx, f, P::Bass, "Bass", x + 56.0 + 3.0 * step, row1, r, a);
-    knob(ui, ctx, f, P::Reverb, "Reverb", x + 56.0 + 4.0 * step, row1, r, a);
+    knob(ui, ctx, f, P::LeslieDrive, "Drive", x + 56.0, row1, r, a);
+    knob(ui, ctx, f, P::LeslieBalance, "Horn/Drum", x + 56.0 + step, row1, r, a);
+    knob(ui, ctx, f, P::LeslieWidth, "Mic width", x + 56.0 + 2.0 * step, row1, r, a);
+    // Rotors, seen from above (the front, where the mics are, is down).
+    let well = f.r(x + 258.0, y + 52.0, 162.0, 112.0);
+    {
+        let pt = ui.painter();
+        pt.rect_filled(well, CornerRadius::same((3.0 * f.s) as u8), WELL);
+        pt.rect_stroke(well, CornerRadius::same((3.0 * f.s) as u8), Stroke::new(f.len(1.0), Color32::from_rgba_unmultiplied(0, 0, 0, 140)), StrokeKind::Outside);
+        let horn = load_f32(&sh.horn);
+        let drum = load_f32(&sh.drum);
+        let dir = |th: f32| vec2(th.sin(), th.cos());
+        // Horn: one live bell, one dummy, on a common shaft.
+        let c = f.p(x + 298.0, y + 100.0);
+        let rr = f.len(34.0);
+        pt.circle_stroke(c, rr, Stroke::new(f.len(1.0), TRACK));
+        let d = dir(horn);
+        let n = vec2(-d.y, d.x);
+        let metal = Color32::from_rgb(196, 198, 202);
+        pt.line_segment([c - d * rr * 0.8, c + d * rr * 0.55], Stroke::new(f.len(3.0), metal));
+        let mouth = c + d * rr * 0.95;
+        let throat = c + d * rr * 0.5;
+        pt.add(Shape::convex_polygon(vec![throat + n * f.len(3.0), mouth + n * f.len(9.0), mouth - n * f.len(9.0), throat - n * f.len(3.0)], metal, Stroke::NONE));
+        pt.circle_filled(c - d * rr * 0.8, f.len(3.5), mix(metal, WELL, 0.4));
+        pt.circle_filled(c, f.len(3.0), TEXT_DIM);
+        // Drum: a cylinder with its scoop.
+        let c = f.p(x + 380.0, y + 100.0);
+        pt.circle_filled(c, rr, Color32::from_rgb(44, 44, 47));
+        pt.circle_stroke(c, rr, Stroke::new(f.len(1.0), TRACK));
+        let d = dir(drum);
+        let mut scoop = vec![c];
+        for k in 0..=16 {
+            let t = drum - 0.9 + 1.8 * k as f32 / 16.0;
+            scoop.push(c + dir(t) * rr * 0.96);
+        }
+        pt.add(Shape::convex_polygon(scoop, mix(BLUE, WELL, 0.35), Stroke::NONE));
+        pt.line_segment([c, c + d * rr * 0.96], Stroke::new(f.len(1.2), mix(BLUE, TEXT, 0.4)));
+        pt.circle_filled(c, f.len(3.0), TEXT_DIM);
+        pt.text(f.p(x + 298.0, y + 152.0), Align2::CENTER_CENTER, "HORN", f.font(8.5), TEXT_DIM);
+        pt.text(f.p(x + 380.0, y + 152.0), Align2::CENTER_CENTER, "DRUM", f.font(8.5), TEXT_DIM);
+    }
+    // Rotor switch (lit as it is: the mod wheel may have moved it).
     let row2 = y + 236.0;
-    knob(ui, ctx, f, P::Speed, "Speed", x + 56.0, row2, r, a);
-    knob(ui, ctx, f, P::Intensity, "Intensity", x + 56.0 + step, row2, r, a);
-    knob(ui, ctx, f, P::Mic, "Mic", x + 56.0 + 2.0 * step, row2, r, a);
+    ui.painter().text(f.p(x + 16.0, row2 - 34.0), Align2::LEFT_CENTER, "ROTOR", f.font(9.5), INK);
+    let shown = (sh.rotor.load(Ordering::Relaxed) as usize).min(2);
+    segmented_shown(ui, ctx, f, P::Rotor, &["Slow", "Fast", "Stop"], x + 16.0, row2 - 18.0, 216.0, 32.0, a, shown);
+    ui.painter().text(f.p(x + 16.0, row2 + 32.0), Align2::LEFT_CENTER, "Chorale · Tremolo · motors off", f.font(9.0), INK_DIM);
     knob(ui, ctx, f, P::Noise, "Noise", x + 56.0 + 3.0 * step, row2, r, a);
     knob(ui, ctx, f, P::Output, "Output", x + 56.0 + 4.0 * step, row2, r, a);
-    groove(ui.painter(), f.p(x + 14.0, y + 304.0), f.p(x + w - 14.0, y + 304.0));
-    segmented(ui, ctx, f, P::Amp, &["Twin", "Line", "DI"], x + 16.0, y + 324.0, 210.0, 24.0, a);
-    toggle(ui, ctx, f, P::Bright, "Bright", x + 300.0, y + 324.0, 118.0, a);
 }
 
 /// The preset list, drawn over everything while open.

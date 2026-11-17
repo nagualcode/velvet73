@@ -112,7 +112,7 @@ impl Tremolo {
 /// The open-loop curve (PI drive → push-pull plate currents → speaker
 /// volts) is solved once into a table; per sample the feedback loop is a
 /// two-step Newton solve on it, and the supply sag scales the ceiling.
-struct Power {
+pub(crate) struct Power {
     v_tab: Vec<f32>,
     i_tab: Vec<f32>,
     inv_step: f32,
@@ -149,7 +149,7 @@ fn tanh_fast(x: f32) -> f32 {
 }
 
 impl Power {
-    fn new(fs: f64) -> Self {
+    pub(crate) fn new(fs: f64) -> Self {
         let mut v_tab = Vec::with_capacity(TAB);
         let mut i_tab = Vec::with_capacity(TAB);
         for k in 0..TAB {
@@ -193,7 +193,7 @@ impl Power {
     }
 
     #[inline]
-    fn run(&mut self, x: f32, ripple: f32) -> f32 {
+    pub(crate) fn run(&mut self, x: f32, ripple: f32) -> f32 {
         // Solve u = x − β·V(u) (feedback into the PI tail), warm-started.
         let mut u = self.u;
         for _ in 0..2 {
@@ -223,7 +223,7 @@ impl Power {
         v
     }
 
-    fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.u = 0.0;
         self.sag = 1.0;
         self.i_avg = 0.16;

@@ -8,6 +8,7 @@
 //! VELVET_PROBE=1 prints tine and voltage levels every 100 ms.
 
 use velvet73::dsp::engine::Engine;
+use velvet73::dsp::leslie::Rotor;
 use velvet73::params::{VelvetParams, controls_from_preset};
 
 fn main() {
@@ -18,7 +19,7 @@ fn main() {
     let secs: f64 = a.get(4).and_then(|s| s.parse().ok()).unwrap_or(8.0);
     let fs: f64 = a.get(5).and_then(|s| s.parse().ok()).unwrap_or(48_000.0);
     let vel: f32 = a.get(6).and_then(|s| s.parse().ok()).unwrap_or(0.65);
-    let c = if preset == "default" {
+    let mut c = if preset == "default" {
         VelvetParams::new().controls()
     } else {
         controls_from_preset(&std::fs::read_to_string(&preset).expect("preset file")).expect("preset")
@@ -32,6 +33,13 @@ fn main() {
         "f3" => notes.push((0.1, secs * 0.8, 53, vel)),
         "f1" => notes.push((0.1, secs * 0.8, 29, vel)),
         "idle" => {}
+        // Fmaj9 held under the pedal while the Leslie goes slow → fast → slow.
+        "leslie" => {
+            pedal.push((0.05, secs * 0.9));
+            for &n in &fmaj9 {
+                notes.push((0.1, 0.6, n, vel));
+            }
+        }
         "chord" => {
             pedal.push((0.05, secs * 0.7));
             for &n in &fmaj9 {
@@ -77,6 +85,8 @@ fn main() {
     let mut e = Engine::new(fs, velvet73::SERIAL);
     let n = (secs * fs) as usize;
     let mut buf = vec![0.0f32; block];
+    let mut buf_r = vec![0.0f32; block];
+    let mut all_r: Vec<f32> = Vec::new();
     let mut all = Vec::with_capacity(n);
     let start = std::time::Instant::now();
     let mut t = 0usize;
@@ -100,9 +110,13 @@ fn main() {
                 e.note_off(note, &c);
             }
         }
+        if script == "leslie" {
+            c.leslie.rotor = if time > 2.0 && time < secs * 0.6 { Rotor::Fast } else { Rotor::Slow };
+        }
         let len = block.min(n - t);
-        e.process(&c, &mut buf[..len]);
+        e.process_stereo(&c, &mut buf[..len], &mut buf_r[..len]);
         all.extend_from_slice(&buf[..len]);
+        all_r.extend_from_slice(&buf_r[..len]);
         if probe && time >= next_probe {
             let pk = buf[..len].iter().fold(0.0f32, |m, s| m.max(s.abs()));
             eprintln!("t={time:5.2}s tipG3={:5.2}mm tipF3={:5.2}mm jack={:6.3}V amp={:6.2}V out={:6.3}", e.tip_mm(55), e.tip_mm(53), e.probe[0], e.probe[1], pk);
@@ -117,9 +131,9 @@ fn main() {
     eprintln!("{preset} [{script}]: {secs:.1}s in {el:.2}s ({:.1}x rt) peak {:.1} dBFS rms {:.1} dBFS", secs / el, 20.0 * f64::from(peak).log10(), 20.0 * rms.log10());
     let spec = hound::WavSpec { channels: 2, sample_rate: fs as u32, bits_per_sample: 32, sample_format: hound::SampleFormat::Float };
     let mut w = hound::WavWriter::create(&out, spec).expect("wav");
-    for s in &all {
-        w.write_sample(*s).unwrap();
-        w.write_sample(*s).unwrap();
+    for (l, r) in all.iter().zip(&all_r) {
+        w.write_sample(*l).unwrap();
+        w.write_sample(*r).unwrap();
     }
     w.finalize().unwrap();
 }

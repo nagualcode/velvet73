@@ -1,6 +1,6 @@
 """Regenerate src/preset_files.rs from factory/<Category>/*.preset (category order below)."""
 import os
-ORDER = ["Stage", "Twin", "Studio", "Worn"]
+ORDER = ["Stage", "Twin", "Leslie", "Studio", "Worn"]
 root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 cats = [c for c in ORDER if os.path.isdir(os.path.join(root, "factory", c))]
 cats += sorted(c for c in os.listdir(os.path.join(root, "factory")) if c not in cats and os.path.isdir(os.path.join(root, "factory", c)))

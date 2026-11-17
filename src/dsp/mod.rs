@@ -5,12 +5,14 @@
 //! R + L) → Stage nameboard (Bass Boost, Volume) → cable → Twin Reverb
 //! Vibrato channel (7025 stages, TMB stack, spring reverb, optical
 //! tremolo, 12AT7 phase inverter, 4×6L6GC with feedback and sag) →
-//! 2×12 open-back cabinet and a close microphone.
+//! 2×12 open-back cabinet and a close microphone; or a Leslie 147 (combo
+//! preamp, 40 W amp, rotating horn and drum, two microphones).
 
 pub mod amp;
 pub mod cab;
 pub mod engine;
 pub mod keys;
+pub mod leslie;
 pub mod mna;
 pub mod pickup;
 pub mod pickup_table;

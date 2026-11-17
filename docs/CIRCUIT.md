@@ -169,5 +169,32 @@ Esquemas completos no manual cap. 11 (pré 80 W Peterson, pré 100 W MC1458 + LE
 - Suitcase (pré, autopan estéreo, 4×12): sem som estéreo de vibrato. É o próximo passo.
 - Double stroke no grave e tine encostando no polo: sem os "clacks" de piano desregulado.
 - Ruído mecânico de teclas e abafadores: só o abafamento é modelado, não o "tchk".
-- Saída mono (o Twin é mono): L = R.
+- Saída mono com o Twin, a linha e o DI (L = R). Com o Leslie (v0.3) a saída é estéreo.
 - Não linearidade geométrica do tine (pitch glide em ff): não modelada; magnitude desconhecida.
+
+## 11. Leslie 147 (v0.3)
+
+Ligação de época: Stage → pré "combo" (um estágio 12AX7 com controle de nível) → amplificador do 147 → divisor de 800 Hz → corneta rotativa em cima, alto-falante de 15" disparando para baixo num tambor rotativo → caixa de madeira → dois microfones. Substitui o Twin (o Leslie era o amplificador).
+
+| Estágio | Onde | Modelo | Evidência |
+|---|---|---|---|
+| Pré + amplificador | `dsp/leslie.rs` `LesliePower` | 12AX7 por tabela de Koren; drive = 0,04 + 2·d³ (Drive 1–10); saída reaproveita a curva push-pull do Twin (tabela, NFB por Newton, sag). O 147 real usa 12AU7 como divisor de fase e 2× 6550 (40 W): mesma topologia, curva da válvula não refeita | [ART][DESIGN] |
+| Divisor | `leslie.rs` | 800 Hz, Linkwitz–Riley de 4ª ordem (soma plana com rotores parados); a rede passiva do 147 não foi modelada peça a peça | [ART][DESIGN] |
+| Corneta | `leslie.rs` | driver: passa-baixa 6 kHz, +2,5 dB em 2 kHz; boca a 0,15 m do eixo | [DESIGN] |
+| Tambor | `leslie.rs` | passa-alta 45 Hz, ressonância da caixa +3 dB em 110 Hz; fonte efetiva a 0,12 m do eixo | [DESIGN] |
+| Velocidades | `leslie.rs` | corneta 48 / 400 rpm, tambor 40 / 342 rpm (medição de John Fisher num 147, polia do meio) | [ART] |
+| Aceleração | `leslie.rs` | tempo até assentar: corneta 1,1 s subindo / 1,5 s descendo, tambor 5,5 / 5,0 s (manual do 122H: 1,8/2,4 e 7/5,5 s; dono de 122XB: 0,9/1,0 e 5,5/4,8 s). Stop = motores desligados, rotores param por inércia | [MAN][ART] |
+| Doppler, reflexos | `leslie.rs` | geometria, não LFO: cada fonte gira no seu círculo; para cada microfone, 4 caminhos (direto, imagens nas paredes laterais a ±0,27 m com ganho 0,38, parede de trás a 0,25 m com 0,30), cada um lido de uma linha de atraso no comprimento real em movimento (interpolação de Hermite), com atenuação 1/d. Smith, Serafin, Abel & Berners, *Doppler Simulation and the Leslie*, DAFx 2002 | [ART][DESIGN] |
+| Diretividade | `leslie.rs` | corneta: 0,40 + 0,60·((1+cos α)/2)^1,5 e um passa-baixa por caminho de 1,8 kHz (de costas) a 9,3 kHz (de frente); tambor: 0,65 + 0,35·(1+cos α)/2 | [DESIGN] |
+| Microfones | `leslie.rs` | a 0,62 m do eixo, abertos de 0° (mono) a 180° (Mic Width) | [DESIGN] |
+| Roda de modulação | `lib.rs` | CC1 ≥ 64 = rápido, < 64 = lento; vale até o controle Rotor ser mexido | [DESIGN] |
+
+**Medido (testes em `leslie.rs` e `tests.rs`):**
+- Tom de 2 kHz pela corneta rápida: frequência oscila entre 1962 e 2037 Hz (previsto ±37 Hz = 2π·0,15 m·6,67 Hz / 343 m/s × 2 kHz).
+- Após 1 s em Fast, a corneta já passou de 90 % da velocidade e o tambor ainda está abaixo de 60 %.
+- Variação de amplitude num tom puro, rápido: corneta ~19–34 dB (inclui cancelamentos entre o direto e os reflexos), tambor ~9–11 dB. Correlação L/R da corneta: +0,37 a 120°, ≈ 0 a 180°; do tambor ≈ +0,93 (o grave é quase mono, como no real).
+- Níveis: Chorale −19,4 dBFS RMS e Gospel Grit −19,4 (Output −15 dB) no acorde de teste, contra −19,0 do Factory.
+- CPU: balada de 12 s a 33× tempo real com o Leslie, contra 28× com o Twin.
+- Sem cliques na troca lento → rápido → lento (`tools/clicks.py`).
+
+**Não modelado:** ruído do vento da corneta e do motor, o "clunk" do freio, variação de correia, a válvula 6550 com sua curva própria, o pré exato do combo (há vários modelos de época).

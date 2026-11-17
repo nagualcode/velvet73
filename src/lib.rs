@@ -12,6 +12,7 @@ pub mod ui;
 
 use dsp::KEYS;
 use dsp::engine::{Controls, Engine};
+use dsp::leslie::Rotor;
 use params::VelvetParams;
 use params::{UiShared, store_f32};
 use std::sync::Arc;
@@ -27,16 +28,18 @@ pub const SERIAL: u32 = 1975;
 pub struct VelvetState {
     engine: Option<Engine>,
     mono: Vec<f32>,
-    last_panic: u32,
+    right: Vec<f32>,
     last_epoch: u32,
-    panic_param: bool,
+    /// The mod wheel's say over the Leslie, until the Rotor control moves.
+    wheel: Option<Rotor>,
+    rotor_param: usize,
     tail: u32,
     sustain: bool,
 }
 
 impl Default for VelvetState {
     fn default() -> Self {
-        Self { engine: None, mono: vec![0.0; MAX_CHUNK], last_panic: 0, last_epoch: 0, panic_param: false, tail: 0, sustain: false }
+        Self { engine: None, mono: vec![0.0; MAX_CHUNK], right: vec![0.0; MAX_CHUNK], last_epoch: 0, wheel: None, rotor_param: 0, tail: 0, sustain: false }
     }
 }
 
@@ -53,6 +56,8 @@ impl Velvet {
                 state.sustain = value >= 64;
                 engine.sustain(state.sustain);
             }
+            // Mod wheel: up is fast, down is slow, as organists use it.
+            EventBody::ControlChange { cc: 1, value, .. } => state.wheel = Some(if value >= 64 { Rotor::Fast } else { Rotor::Slow }),
             EventBody::ControlChange { cc: 123, .. } => engine.all_notes_off(),
             EventBody::ControlChange { cc: 120, .. } => return true,
             _ => {}
@@ -60,19 +65,15 @@ impl Velvet {
         false
     }
 
-    fn check_panic(state: &mut VelvetState, params: &VelvetParams) {
-        let n = params.ui.panic.load(Ordering::Relaxed);
+    /// A preset change puts a new instrument on the stand: silence the old one.
+    fn check_preset(state: &mut VelvetState, params: &VelvetParams) {
         let epoch = params.ui.preset_epoch.load(Ordering::Relaxed);
-        let p = params.panic.value();
-        let rising = p && !state.panic_param;
-        state.panic_param = p;
-        if (n != state.last_panic || epoch != state.last_epoch || rising)
+        if epoch != state.last_epoch
             && let Some(e) = state.engine.as_mut()
         {
             e.panic();
             state.sustain = false;
         }
-        state.last_panic = n;
         state.last_epoch = epoch;
     }
 
@@ -82,6 +83,8 @@ impl Velvet {
             store_f32(&ui.level[k], engine.levels[k]);
         }
         ui.sustain.store(u32::from(state.sustain), Ordering::Relaxed);
+        store_f32(&ui.horn, engine.leslie.horn_angle);
+        store_f32(&ui.drum, engine.leslie.drum_angle);
     }
 }
 
@@ -98,7 +101,6 @@ impl PluginLogic for Velvet {
         if rebuild {
             state.engine = Some(Engine::new(config.sample_rate, SERIAL));
         }
-        state.last_panic = params.ui.panic.load(Ordering::Relaxed);
         state.last_epoch = params.ui.preset_epoch.load(Ordering::Relaxed);
         state.tail = (config.sample_rate * 6.0) as u32;
     }
@@ -117,8 +119,16 @@ impl PluginLogic for Velvet {
         if n == 0 || state.engine.is_none() {
             return ProcessStatus::Normal;
         }
-        Self::check_panic(state, params);
-        let c = params.controls();
+        Self::check_preset(state, params);
+        let mut c = params.controls();
+        let rp = params.rotor.value().to_index();
+        if rp != state.rotor_param {
+            state.rotor_param = rp;
+            state.wheel = None;
+        }
+        if let Some(r) = state.wheel {
+            c.leslie.rotor = r;
+        }
         let n_out = buffer.num_output_channels();
         let mut ev = 0;
         let mut done = 0;
@@ -131,18 +141,31 @@ impl PluginLogic for Velvet {
                     state.engine.as_mut().expect("engine").panic();
                     state.sustain = false;
                 }
+                if let Some(r) = state.wheel {
+                    c.leslie.rotor = r;
+                }
                 ev += 1;
             }
             let next = events.get(ev).map_or(n, |e| (e.sample_offset as usize).min(n));
             let end = next.max(done + 1).min(done + MAX_CHUNK).min(n);
             let len = end - done;
             let engine = state.engine.as_mut().expect("engine");
-            engine.process(&c, &mut state.mono[..len]);
-            for ch in 0..n_out.min(2) {
-                buffer.output(ch)[done..end].copy_from_slice(&state.mono[..len]);
+            engine.process_stereo(&c, &mut state.mono[..len], &mut state.right[..len]);
+            if n_out >= 2 {
+                buffer.output(0)[done..end].copy_from_slice(&state.mono[..len]);
+                buffer.output(1)[done..end].copy_from_slice(&state.right[..len]);
+            } else if n_out == 1 {
+                for (o, (l, r)) in buffer.output(0)[done..end].iter_mut().zip(state.mono[..len].iter().zip(&state.right[..len])) {
+                    *o = 0.5 * (l + r);
+                }
             }
             done = end;
         }
+        params.ui.rotor.store(match c.leslie.rotor {
+            Rotor::Slow => 0,
+            Rotor::Fast => 1,
+            Rotor::Stop => 2,
+        }, Ordering::Relaxed);
         Self::publish(state, &params.ui);
         ProcessStatus::Normal
     }
