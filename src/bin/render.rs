@@ -42,6 +42,19 @@ fn main() {
                 notes.push((0.1, 0.6, n, vel));
             }
         }
+        // "r72": one key re-struck 12 times under the pedal, soft to
+        // medium, at uneven intervals (the tine still ringing each time).
+        s if s.starts_with('r') && s[1..].parse::<u8>().is_ok() => {
+            let n: u8 = s[1..].parse().unwrap();
+            pedal.push((0.02, secs));
+            let gaps = [0.31, 0.23, 0.37, 0.27, 0.41, 0.19, 0.33, 0.29, 0.43, 0.21, 0.35, 0.3];
+            let vels = [0.35, 0.5, 0.42, 0.55, 0.3, 0.48, 0.38, 0.52, 0.45, 0.33, 0.58, 0.4];
+            let mut t = 0.1;
+            for k in 0..12 {
+                notes.push((t, t + 0.12, n, vels[k]));
+                t += gaps[k];
+            }
+        }
         // C2..C6 as fjord-render's "scale" plays them.
         "scalecmp" => {
             for (k, n) in [36u8, 43, 48, 55, 60, 67, 72, 79, 84].iter().enumerate() {

@@ -402,6 +402,18 @@ impl Engine {
         }
     }
 
+    /// Hammer–tine touches in a key's last blow (analysis).
+    pub fn touches(&self, note: u8) -> u32 {
+        let k = i32::from(note) - i32::from(MIDI_LOW);
+        if (0..KEYS as i32).contains(&k) { self.voices[k as usize].touches } else { 0 }
+    }
+
+    /// Amplitude of each mode of a key (mm), for analysis.
+    pub fn mode_mm(&self, note: u8) -> Vec<f32> {
+        let k = i32::from(note) - i32::from(MIDI_LOW);
+        if (0..KEYS as i32).contains(&k) { self.voices[k as usize].mode_mm() } else { Vec::new() }
+    }
+
     /// Tip excursion of a key (mm), for analysis.
     pub fn tip_mm(&self, note: u8) -> f32 {
         let k = i32::from(note) - i32::from(MIDI_LOW);

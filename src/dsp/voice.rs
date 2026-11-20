@@ -35,6 +35,11 @@ pub struct Voice {
     xh: f32,
     vh: f32,
     contact: bool,
+    /// The hammer has reached the tine (until then it is still rising).
+    touched: bool,
+    in_touch: bool,
+    /// Separate hammer–tine touches in the last blow (analysis).
+    pub touches: u32,
     contact_left: u32,
     prev_phi: f32,
     pub active: bool,
@@ -70,6 +75,9 @@ impl Voice {
             xh: 0.0,
             vh: 0.0,
             contact: false,
+            touched: false,
+            in_touch: false,
+            touches: 0,
             contact_left: 0,
             prev_phi: 0.0,
             active: false,
@@ -129,11 +137,29 @@ impl Voice {
     }
 
     /// The hammer arrives at `v0` m/s.
+    ///
+    /// It rises from below: on a ringing tine it starts under the lowest
+    /// point the strike line can swing to, so the tine, much faster near
+    /// the hammer than the hammer itself, comes down to meet it near the
+    /// bottom of its swing, as on the instrument. (Placing the hammer
+    /// against the tine wherever it happened to be let a fast tine
+    /// mid-swing slam into a slow hammer: a hard, hissing attack on
+    /// soft re-strikes under the pedal.)
     pub fn strike(&mut self, v0: f32) {
-        self.xh = self.strike_disp();
+        let mut reach = 0.0;
+        for i in 0..M {
+            if i != HORIZ {
+                reach += self.phi[i].abs() * (self.re[i] * self.re[i] + self.im[i] * self.im[i]).sqrt();
+            }
+        }
+        self.xh = -reach;
         self.vh = v0;
         self.contact = true;
-        self.contact_left = (0.02 * self.fs) as u32; // give up after 20 ms
+        self.touched = false;
+        self.in_touch = false;
+        self.touches = 0;
+        // Give up 20 ms after the hammer could have crossed the whole swing.
+        self.contact_left = ((0.02 + 2.0 * reach / v0.max(0.05)) * self.fs) as u32;
         self.active = true;
         self.nm = M;
         self.held = true;
@@ -213,7 +239,12 @@ impl Voice {
         for _ in 0..SUBSTEPS {
             let c = self.xh - self.strike_disp();
             let mut f = 0.0;
+            if c > 0.0 && !self.in_touch {
+                self.touches += 1;
+            }
+            self.in_touch = c > 0.0;
             if c > 0.0 {
+                self.touched = true;
                 let cv = self.vh - self.strike_vel();
                 f = (k * c.powf(beta) * (1.0 + lam * cv)).max(0.0);
             }
@@ -231,7 +262,7 @@ impl Voice {
                 self.re[i] = self.cr4[i] * a - self.ci4[i] * b;
                 self.im[i] = self.ci4[i] * a + self.cr4[i] * b;
             }
-            if c <= 0.0 && self.vh < self.strike_vel() {
+            if self.touched && c <= 0.0 && self.vh < self.strike_vel() {
                 self.contact = false;
                 break;
             }
@@ -312,6 +343,10 @@ impl Voice {
         }
     }
 
+    pub fn mode_mm(&self) -> Vec<f32> {
+        (0..M).map(|i| 1000.0 * (self.re[i] * self.re[i] + self.im[i] * self.im[i]).sqrt()).collect()
+    }
+
     pub fn tip_amplitude_mm(&self) -> f32 {
         let mut a = 0.0;
         for i in 0..M {
@@ -367,5 +402,86 @@ mod probe {
                 println!("key {key:2} f0 {:7.1} v0 {v0:.1}: contact {:5.2} ms, hammer out {:5.2} m/s, modes mm [{}]", v.km.f0, contact as f64 / 96.0, v.vh, amps.join(" "));
             }
         }
+    }
+
+    /// Re-strike a ringing tine at many phases: contact episodes (touch,
+    /// release, touch again), contact time, and the high inharmonic mode
+    /// left behind, against a strike on a tine at rest.
+    /// `cargo test --release --lib restrike_probe -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn restrike_probe() {
+        let fs = 96_000.0;
+        let u = Unit::new(1975);
+        let reg = Regulation { voicing: 0.45, gap_mm: 2.0, hammer: 1.0, condition: 0.0, a4: 440.0, stretch: false };
+        for key in [40usize, 52, 64] {
+            for v0 in [0.35f32, 0.6] {
+                let run = |pre: usize| {
+                    let mut v = Voice::new(u.model(key, &reg, fs), fs);
+                    let mut out = vec![0.0f32; 1];
+                    if pre > 0 {
+                        v.strike(0.6);
+                        for _ in 0..pre {
+                            v.process(&mut out);
+                        }
+                    }
+                    v.strike(v0);
+                    let (mut eps, mut was, mut n) = (0, false, 0);
+                    while v.contact {
+                        let c = v.xh - v.strike_disp();
+                        if c > 0.0 && !was {
+                            eps += 1;
+                        }
+                        was = c > 0.0;
+                        v.process(&mut out);
+                        n += 1;
+                    }
+                    let hi = (INHARM..M).map(|i| 1000.0 * (v.re[i] * v.re[i] + v.im[i] * v.im[i]).sqrt()).fold(0.0f32, f32::max);
+                    (eps, n as f64 / 96.0, hi)
+                };
+                let (e0, t0, h0) = run(0);
+                let mut line = format!("key {key} v0 {v0}: rest [{e0} ep {t0:.2} ms hi {h0:.4}] |");
+                for k in 0..12 {
+                    let pre = 9600 + k * 37; // ~0.1 s later, at 12 phases
+                    let (e, t, h) = run(pre);
+                    line += &format!(" {e}/{t:.1}/{:+.0}", 20.0 * (h / h0).log10());
+                }
+                println!("{line}");
+            }
+        }
+    }
+
+    /// A soft blow on a tine already ringing at ~1.1 mm, against fresh
+    /// blows: strike-line speed of the ringing tine, and the 20x mode.
+    #[test]
+    #[ignore]
+    fn ringing_collision_probe() {
+        let fs = 96_000.0;
+        let u = Unit::new(1975);
+        let reg = Regulation { voicing: 0.45, gap_mm: 2.0, hammer: 1.0, condition: 0.0, a4: 440.0, stretch: false };
+        let key = 40;
+        let mut out = vec![0.0f32; 1];
+        let hi = |v: &Voice| 1000.0 * (v.re[INHARM + 1] * v.re[INHARM + 1] + v.im[INHARM + 1] * v.im[INHARM + 1]).sqrt();
+        for v0 in [0.15f32, 0.3, 0.5, 0.8, 1.2] {
+            let mut v = Voice::new(u.model(key, &reg, fs), fs);
+            v.strike(v0);
+            while v.contact { v.process(&mut out); }
+            println!("fresh v0 {v0:.2}: tip {:.2} mm, 20x mode {:.4} mm", v.tip_amplitude_mm(), hi(&v));
+        }
+        let mut v = Voice::new(u.model(key, &reg, fs), fs);
+        v.strike(0.55);
+        while v.contact { v.process(&mut out); }
+        for _ in 0..4800 { v.process(&mut out); }
+        let sp: f32 = (0..M).filter(|&i| i != HORIZ).map(|i| v.phi[i].abs() * v.w[i] * (v.re[i] * v.re[i] + v.im[i] * v.im[i]).sqrt()).sum();
+        println!("ringing: tip {:.2} mm, strike-line speed up to {:.2} m/s", v.tip_amplitude_mm(), sp);
+        for k in 0..8 {
+            let mut w = Voice::new(v.km.clone(), fs);
+            w.re = v.re; w.im = v.im; w.active = true; w.prev_phi = v.prev_phi;
+            for _ in 0..(k * 46) { w.process(&mut out); }
+            w.strike(0.15);
+            while w.contact { w.process(&mut out); }
+            print!(" {:.4}", hi(&w));
+        }
+        println!("  <- 20x mode after a 0.15 m/s blow at 8 phases");
     }
 }

@@ -399,3 +399,55 @@ fn register_probe() {
         eprintln!("{line}");
     }
 }
+
+/// Re-strikes under the pedal against fresh strikes at the same velocity:
+/// high-frequency (>5 kHz) energy in the first 15 ms (analysis).
+#[test]
+#[ignore]
+fn restrike_onsets() {
+    use crate::dsp::{Biquad, Bq};
+    let mut c = Controls::default();
+    if std::env::var("AMP_DI").is_ok() {
+        c.amp = crate::dsp::engine::AmpMode::Di;
+    }
+    if let Ok(h) = std::env::var("HAMMER") {
+        c.hammer = h.parse().unwrap();
+    }
+    let fs = 48_000.0;
+    let vels = [0.35f32, 0.5, 0.42, 0.55, 0.3, 0.48, 0.38, 0.52, 0.45, 0.33, 0.58, 0.4];
+    let gaps = [0.31f64, 0.23, 0.37, 0.27, 0.41, 0.19, 0.33, 0.29, 0.43, 0.21, 0.35, 0.3];
+    let hf = |e: &mut Engine, n: usize| -> (f32, f32) {
+        let mut out = vec![0.0f32; n];
+        e.process(&c, &mut out);
+        let mut hp = Biquad::new(Bq::Hp, 5000.0, 0.7, fs);
+        let mut hp2 = Biquad::new(Bq::Hp, 5000.0, 0.7, fs);
+        let h: f32 = out.iter().map(|&x| hp2.run(hp.run(x)).powi(2)).sum();
+        let a: f32 = out.iter().map(|x| x * x).sum();
+        (h.sqrt(), a.sqrt())
+    };
+    let win = (0.015 * fs) as usize;
+    for note in [60u8, 72, 84] {
+        let mut seq = Engine::new(fs, SERIAL);
+        seq.sustain(true);
+        let mut line = format!("note {note}:");
+        for k in 0..12 {
+            let mut fresh = Engine::new(fs, SERIAL);
+            fresh.sustain(true);
+            fresh.note_on(note, vels[k], &c);
+            let (hf0, a0) = hf(&mut fresh, win);
+            let before = seq.mode_mm(note);
+            seq.note_on(note, vels[k], &c);
+            let (hf1, a1) = hf(&mut seq, win);
+            if std::env::var("MODES").is_ok() && note == 60 {
+                let m1 = seq.mode_mm(note);
+                let m0 = fresh.mode_mm(note);
+                eprintln!("  k{k} touches {} vel {:.2}: before fund {:.3} | inharm (7.1x 20x 40x) seq {:.4} {:.4} {:.4} fresh {:.4} {:.4} {:.4}", seq.touches(note), vels[k], before[0] + before[1], m1[4], m1[5], m1[6], m0[4], m0[5], m0[6]);
+            }
+            let rest = (gaps[k] * fs) as usize - win;
+            let mut out = vec![0.0f32; rest];
+            seq.process(&c, &mut out);
+            line += &format!(" {:+.0}", 20.0 * ((hf1 / a1) / (hf0 / a0)).log10());
+        }
+        eprintln!("{line}   (HF/total re fresh strike, dB)");
+    }
+}
