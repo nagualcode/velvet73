@@ -12,6 +12,8 @@ use super::voice::Voice;
 use super::{HighPass, KEYS, MIDI_LOW, Smooth};
 
 pub const MAX_CHUNK: usize = 256;
+/// Floor of the per-register hammer scale (the bass escapement).
+pub const REG_MIN: f32 = 0.25;
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum AmpMode {
@@ -179,8 +181,10 @@ impl Engine {
         // real harp allows [DESIGN, docs/CIRCUIT.md §1].
         let p = 3.5 - 2.0 * c.touch;
         let v = &mut self.voices[k - 1];
-        let reg = ((v.km.f0 / 196.0).powf(0.8) as f32).clamp(0.45, 1.3);
-        let v0 = (0.1 + 1.5 * vel.clamp(0.0, 1.0).powf(p)) * reg;
+        let reg = ((v.km.f0 / 196.0).powf(0.8) as f32).clamp(REG_MIN, 1.3);
+        // 0.94: the strike energy the lighter sub-fundamental used to take
+        // (SUB_MASS 3 → 20) now reaches the tine; keeps the touch calibrated.
+        let v0 = 0.94 * (0.1 + 1.5 * vel.clamp(0.0, 1.0).powf(p)) * reg;
         v.set_damper(false);
         v.strike(v0);
         let pos = v.km.harp_pos;
@@ -325,7 +329,9 @@ impl Engine {
         // cancels most of it; what remains is a few tens of µV.
         let hum = 4e-5 * c.noise;
         let dph = 60.0 / self.fs;
-        let gain = 10f32.powf(c.output_db / 20.0);
+        // −1.6 dB: the bass gained body with the even-level voicing (v0.4);
+        // keeps the presets where they were.
+        let gain = 0.83 * 10f32.powf(c.output_db / 20.0);
         for i in 0..ni {
             let mut e = self.harp[i];
             if hum > 0.0 {

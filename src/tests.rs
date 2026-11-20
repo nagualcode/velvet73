@@ -376,3 +376,26 @@ fn mod_holds_the_pedal() {
     assert!(held > 0.01, "MOD did not hold the chord: {held}");
     assert!(after < held * 0.1, "MOD up did not damp: {held} -> {after}");
 }
+
+/// Tip excursion and pickup gap across the register (analysis).
+#[test]
+#[ignore]
+fn register_probe() {
+    let c = Controls::default();
+    let fs = 48_000.0;
+    let mut out = vec![0.0f32; 256];
+    for note in [28u8, 33, 36, 40, 45, 53, 60, 72] {
+        let mut line = format!("midi {note:3}:");
+        for vel in [0.5f32, 0.787, 1.0] {
+            let mut e = Engine::new(fs, SERIAL);
+            e.note_on(note, vel, &c);
+            let mut peak = 0.0f32;
+            for _ in 0..(fs as usize / 4 / 256) {
+                e.process(&c, &mut out);
+                peak = peak.max(e.tip_mm(note));
+            }
+            line += &format!("  v{vel:.2} tip {peak:5.2} mm");
+        }
+        eprintln!("{line}");
+    }
+}

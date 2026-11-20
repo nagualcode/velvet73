@@ -29,7 +29,10 @@ pub const K_BASE: f64 = 1.6e10;
 /// 6.27/17.5/34.4), which moves its nodes. Calibrated so a pp F3 attack
 /// matches Gabrielli et al. 2020 Fig. 5 at the pickup output [DESIGN←ART].
 pub const PART: [f64; 5] = [0.0134, 2.55, 8.4, 8.4, 8.4];
-pub const SUB_MASS: f64 = 3.0;
+pub const SUB_MASS: f64 = 20.0;
+/// Bass pickups closer for an even level: gap ∝ (f0/C3)^GAP_EXP, floor.
+pub const GAP_EXP: f64 = 0.7;
+pub const GAP_MIN: f64 = 0.45;
 
 /// Modes per tone generator.
 pub const M: usize = 9;
@@ -211,8 +214,11 @@ impl Unit {
         let beat = if no_bar { 0.0 } else { (0.03 + 0.25 * cond) * (0.4 + f64::from(g[4]).abs()) };
         modes[FUND_A] = Mode { hz: f0, decay: base * 1.8, at_strike: p1, mass: m1 / 0.62, on: true };
         modes[FUND_B] = Mode { hz: f0 + beat, decay: base * 0.55, at_strike: p1, mass: m1 / 0.38, on: !no_bar };
-        // Sub-fundamental: the tone bar's own mode [ART Gabrielli].
-        let sub_ratio = (0.48 + 0.19 * f64::from(g[5])).clamp(0.3, 0.86);
+        // Sub-fundamental: the tone bar's own mode [ART Gabrielli]. Measured
+        // at 0.83·f0 on F1 and 0.58 on A2 and F3: interpolated in log f
+        // between them, constant above, with a small spread per fork.
+        let lf = ((f0 / 43.65).ln() / (110.0f64 / 43.65).ln()).clamp(0.0, 1.0);
+        let sub_ratio = 0.83 + (0.58 - 0.83) * lf + 0.04 * f64::from(g[5]).clamp(-1.5, 1.5);
         let sub_decay = (9.1 * (f0 / 43.65).powf(1.96)).clamp(6.0, 400.0);
         modes[SUB] = Mode { hz: f0 * sub_ratio, decay: sub_decay, at_strike: p1, mass: m1 * SUB_MASS * (1.0 + 0.8 * f64::from(g[6]).abs()), on: !no_bar };
         let (ratios, sds): ([f64; 5], [f64; 5]) =
@@ -242,7 +248,11 @@ impl Unit {
         // --- pickup --------------------------------------------------------
         let v = f64::from(reg.voicing);
         let offset = 0.25 + 4.75 * v.powf(1.6) + f64::from(g[8]) * (0.08 + 0.35 * cond);
-        let gap = f64::from(reg.gap_mm) * (1.0 + f64::from(g[9]) * (0.03 + 0.12 * cond));
+        // Volume adjustment: the technician sets each pickup by ear for an
+        // even level [MAN ch. 4]; a bass tine moves slowly, so its pickup
+        // sits closer. PICKUP is the gap from F3 up.
+        let even = (f0 / 174.6).powf(GAP_EXP).clamp(GAP_MIN, 1.0);
+        let gap = f64::from(reg.gap_mm) * even * (1.0 + f64::from(g[9]) * (0.03 + 0.12 * cond));
         // Harp wiring: 73-key harps use a group of 4 at the bottom (keys
         // 8..11) then groups of 3; the 88's extra keys come in 3s and a 4.
         let (group, size) = if key >= 12 {

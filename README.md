@@ -49,7 +49,7 @@ In Ableton Live it appears under Plug-ins → Jardim Sonoro → Velvet73. There 
 | Control | What it does |
 |---|---|
 | Voicing | Height of the tine tip against the pickup's axis. On the axis (Bell), the octave dominates. Slightly above (Factory), the richest tone. Well off (Deep), mostly the fundamental. |
-| Pickup | Gap between tine and pickup, 0.5 to 3.2 mm. Closer is louder and barks sooner. |
+| Pickup | Gap between tine and pickup, 0.5 to 3.2 mm, from F3 up. Closer is louder and barks sooner. Below F3 the pickups sit progressively closer, the way a technician evens out the level by ear, because a bass tine moves slowly. |
 | Hammer | Hardness of the neoprene tips against the factory grading (30 to 90 durometer from bass to treble). |
 | Touch | How much of your key velocity reaches the hammers. Lower keeps the bark for the loud notes. |
 | Condition | Regulated, Studio, Gigged, Road worn. Tuning drift, uneven voicing, tired tines, worn dampers. The same piano every time you open it, just older. |

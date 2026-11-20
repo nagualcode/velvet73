@@ -44,7 +44,7 @@ tecla → martelo+neoprene → tine (modal) ⇄ tone bar (modal) → ponta do ti
 
 | Modo | Razão média ± desvio (teclado todo, Mk I 73) | Origem física | Nível |
 |---|---|---|---|
-| sub | 0,48 ± 0,19 (F1: 0,83; F3: 0,58) | **tone bar** | [P] Gabrielli |
+| sub | F1: 0,83; A2 e F3: 0,58 (v0.4: interpolado em log f, ±0,04 por garfo; antes sorteado em 0,48 ± 0,19) | **tone bar** | [P] Gabrielli |
 | 1 | 1 | tine + tone bar | — |
 | 2 | 7,1 ± 0,3 | tine (viga ideal seria 6,27) | [P] |
 | 3 | 20,4 ± 0,4 | tine (ideal 17,55) | [P] |
@@ -198,3 +198,27 @@ Ligação de época: Stage → pré "combo" (um estágio 12AX7 com controle de n
 - Sem cliques na troca lento → rápido → lento (`tools/clicks.py`).
 
 **Não modelado:** ruído do vento da corneta e do motor, o "clunk" do freio, variação de correia, a válvula 6550 com sua curva própria, o pré exato do combo (há vários modelos de época).
+
+## 12. O grave (v0.4)
+
+Queixa do usuário, comparando com as amostras oficiais de Mark I do Nord Stage 4 (EP1/EP2, via `~/code/fjord`): "o grave do Nord é mais definido; o nosso tem uma distorção, uma destruição das fases senoidais". Medido com `tools/bass_compare.py` (C1, E1, G1 a velocidade 100, saída direta) e uma escala C2–C6.
+
+**Causa 1: o sub-fundamental sacudia a lâmina.** O espectro do nosso E1 tinha picos fora da série harmônica (56, 67, 108, 138, 190, 231 Hz), todos n·f₀ ± 26 Hz: intermodulação, no captador, entre os harmônicos e o modo sub-fundamental. Gabrielli mostra que esse modo é da barra de tom ("present in the tonebar only") e, nos modos medidos a laser passados pelo captador (`A2-sidebands.wav`), as bandas laterais dele ficam em −53 a −58 dB. As nossas estavam em −9 a −17 dB no E1. Como o captador quase não vê o movimento lento do sub sozinho, a linha do sub ficava baixa e a calibração pela fig. 5 não acusava; mas ele deslocava o ponto de trabalho do captador e modulava cada harmônico.
+- `SUB_MASS` 3 → 20: no A2 com H2 −12 dB, bandas do sub em −55 a −60 dB (Gabrielli −53 a −58) [ART].
+- Razão do sub: das medições (0,83 F1 → 0,58 A2/F3), não mais sorteada entre 0,30 e 0,86.
+- Com o sub mais pesado a barra absorve menos do golpe: velocidade do martelo × 0,94 para manter a excursão calibrada do F3 (1,04 / 1,61 / 2,60 / 4,49 mm a 64/80/100/127, idêntica à v0.3). A H2 do F3 subiu 1–2 dB (−6,6 dB a 100), porque o que virava banda lateral volta para os harmônicos.
+
+**Causa 2: o grave levava golpe demais.** A escala por registro (f₀/196)^0,8 travava em 0,45 abaixo do E2: do E2 para baixo todas as notas recebiam o mesmo golpe e as lâminas longas balançavam 10–12 mm (contando o sub). O manual limita o balanço ao escapement do grave, 6,35–9,5 mm. Piso agora 0,25 (`REG_MIN`): E1 a velocidade máxima, 5,0 mm [MAN].
+
+**Causa 3: grave baixo demais.** Na saída direta, o Nord fica plano de C2 a C6 (+1 a −5 dB); o nosso C2 estava 10 dB abaixo do C4: a tensão é proporcional à velocidade da ponta, e o grave vibra devagar. No piano real o técnico acerta o captador nota a nota "de ouvido" para nivelar (Volume Adjustment, 1,6–3,2 mm [MAN cap. 4]). Distância por nota = Pickup × (f₀/F3)^0,7, piso 0,45, só abaixo do F3 (o controle Pickup passa a valer do F3 para cima) [DESIGN←MAN, calibrado contra o Nord].
+
+| Medida (vel. 100, saída direta) | v0.3 | v0.4 | Nord EP2 |
+|---|---|---|---|
+| E1: H2 / H3 (dB re f₀) | −0,2 / +1,8 | −23 / −4,8 | −8,6 / −4,5 |
+| E1: bandas laterais mais fortes | −9 a −17 dB | −32 a −40 dB | ~−39 dB |
+| Nível C2 / G2 / C3 (re C4) | −10 / −7 / −5 dB | −2 / −2 / −2 dB | +1 / −2 / −2 dB |
+| Excursão máx. da ponta, E1 / F3 | 9,9 / 6,7 mm | 5,0 / 5,2 mm | — |
+
+Saída geral −1,6 dB (o grave ganhou corpo); presets de volta a −17,3…−20,1 dBFS RMS no acorde de teste (Factory −19,0).
+
+**Pelo Twin:** a caixa aberta 2×12 (passa-alta ~72 Hz) e o transformador tiram a fundamental do E1 (41 Hz); a 3ª harmônica fica ~10 dB acima dela. É o Twin; quem quer a fundamental dos graves usa Line ou DI.

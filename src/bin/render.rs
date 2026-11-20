@@ -30,6 +30,8 @@ fn main() {
     let mut pedal: Vec<(f64, f64)> = Vec::new();
     match script.as_str() {
         "single" => notes.push((0.1, secs * 0.6, 55, vel)),
+        // "n45": one note (MIDI number), held.
+        s if s.starts_with('n') && s[1..].parse::<u8>().is_ok() => notes.push((0.1, secs * 0.8, s[1..].parse().unwrap(), vel)),
         "f3" => notes.push((0.1, secs * 0.8, 53, vel)),
         "f1" => notes.push((0.1, secs * 0.8, 29, vel)),
         "idle" => {}
@@ -38,6 +40,18 @@ fn main() {
             pedal.push((0.05, secs * 0.9));
             for &n in &fmaj9 {
                 notes.push((0.1, 0.6, n, vel));
+            }
+        }
+        // C2..C6 as fjord-render's "scale" plays them.
+        "scalecmp" => {
+            for (k, n) in [36u8, 43, 48, 55, 60, 67, 72, 79, 84].iter().enumerate() {
+                notes.push((0.1 + k as f64 * secs / 9.5, 0.1 + (k as f64 + 0.8) * secs / 9.5, *n, vel));
+            }
+        }
+        // C1, E1, G1, 3 s apart: the same notes and timing as fjord-render's "low".
+        "lowcmp" => {
+            for (k, n) in [24u8, 28, 31].iter().enumerate() {
+                notes.push((0.1 + k as f64 * secs / 3.2, 0.1 + (k as f64 + 0.85) * secs / 3.2, *n, vel));
             }
         }
         "chord" => {
