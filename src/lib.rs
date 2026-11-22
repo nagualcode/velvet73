@@ -35,17 +35,11 @@ pub struct VelvetState {
     rotor_param: usize,
     tail: u32,
     sustain: bool,
-    /// The sustain pedal is down if CC 64 says so, or the MOD control when
-    /// it is set to act as the pedal (for keyboards with no pedal jack).
-    pedal_cc64: bool,
-    pedal_mod: bool,
-    /// MOD (CC 1) is the pedal (true) or the Leslie's rotor switch.
-    mod_is_pedal: bool,
 }
 
 impl Default for VelvetState {
     fn default() -> Self {
-        Self { engine: None, mono: vec![0.0; MAX_CHUNK], right: vec![0.0; MAX_CHUNK], last_epoch: 0, wheel: None, rotor_param: 0, tail: 0, sustain: false, pedal_cc64: false, pedal_mod: false, mod_is_pedal: true }
+        Self { engine: None, mono: vec![0.0; MAX_CHUNK], right: vec![0.0; MAX_CHUNK], last_epoch: 0, wheel: None, rotor_param: 0, tail: 0, sustain: false }
     }
 }
 
@@ -59,38 +53,16 @@ impl Velvet {
             EventBody::NoteOn { note, velocity, .. } => engine.note_on(note, f32::from(velocity) / 127.0, c),
             EventBody::NoteOff { note, .. } => engine.note_off(note, c),
             EventBody::ControlChange { cc: 64, value, .. } => {
-                state.pedal_cc64 = value >= 64;
-                Self::pedal(state);
+                state.sustain = value >= 64;
+                engine.sustain(state.sustain);
             }
-            // MOD: the pedal, or (set to Rotor) up is fast and down is slow,
-            // as organists use it.
-            EventBody::ControlChange { cc: 1, value, .. } => {
-                if state.mod_is_pedal {
-                    state.pedal_mod = value >= 64;
-                    Self::pedal(state);
-                } else {
-                    state.wheel = Some(if value >= 64 { Rotor::Fast } else { Rotor::Slow });
-                }
-            }
+            // Mod wheel: up is fast, down is slow, as organists use it.
+            EventBody::ControlChange { cc: 1, value, .. } => state.wheel = Some(if value >= 64 { Rotor::Fast } else { Rotor::Slow }),
             EventBody::ControlChange { cc: 123, .. } => engine.all_notes_off(),
             EventBody::ControlChange { cc: 120, .. } => return true,
             _ => {}
         }
         false
-    }
-
-    fn pedal(state: &mut VelvetState) {
-        let down = state.pedal_cc64 || state.pedal_mod;
-        if down != state.sustain {
-            state.sustain = down;
-            state.engine.as_mut().expect("engine").sustain(down);
-        }
-    }
-
-    fn release_pedals(state: &mut VelvetState) {
-        state.sustain = false;
-        state.pedal_cc64 = false;
-        state.pedal_mod = false;
     }
 
     /// A preset change puts a new instrument on the stand: silence the old one.
@@ -100,7 +72,7 @@ impl Velvet {
             && let Some(e) = state.engine.as_mut()
         {
             e.panic();
-            Self::release_pedals(state);
+            state.sustain = false;
         }
         state.last_epoch = epoch;
     }
@@ -149,14 +121,6 @@ impl PluginLogic for Velvet {
         }
         Self::check_preset(state, params);
         let mut c = params.controls();
-        let mod_is_pedal = params.mod_target.value().to_index() == 0;
-        if mod_is_pedal != state.mod_is_pedal {
-            // Switching roles lets go of whatever MOD was holding.
-            state.mod_is_pedal = mod_is_pedal;
-            state.pedal_mod = false;
-            state.wheel = None;
-            Self::pedal(state);
-        }
         let rp = params.rotor.value().to_index();
         if rp != state.rotor_param {
             state.rotor_param = rp;
@@ -175,7 +139,7 @@ impl PluginLogic for Velvet {
                 }
                 if Self::handle_event(state, &c, &e.body) {
                     state.engine.as_mut().expect("engine").panic();
-                    Self::release_pedals(state);
+                    state.sustain = false;
                 }
                 if let Some(r) = state.wheel {
                     c.leslie.rotor = r;

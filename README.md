@@ -35,12 +35,11 @@ In Ableton Live it appears under Plug-ins → Jardim Sonoro → Velvet73. There 
 1. Load it. You get **Factory**: a 1975 Stage fresh off the regulation bench, into a Twin on 4.
 2. Play a chord softly. That is the bell.
 3. Play the same chord as if you meant it. That is the bark. If it barks too early or too late for your keyboard, move **Touch**.
-4. Hold the sustain pedal (CC 64) and play. No pedal? The MOD button or wheel (CC 1) is the pedal unless you tell it otherwise (MOD, at the top).
-   With the pedal down, every free tine catches a little of each blow, the way the manual says it should.
+4. Hold the sustain pedal (CC 64) and play. Every free tine catches a little of each blow, the way the manual says it should.
 5. Turn **Voicing** towards Bell and listen to the octave appear over the note. Turn it towards Deep and it becomes a sine with good posture.
 6. Switch the Twin to **DI**. That is the piano with no amplifier, straight into the desk. Switch back.
 7. Raise **Intensity**. The Twin's "Vibrato" is a tremolo. Fender called it vibrato, and the vibrato on their guitars a tremolo. It has never been fixed.
-8. Switch the amp to **Leslie**, set **MOD** to Rotor and push the mod wheel up. The horn is at speed in about a second. The drum takes five. That disagreement is most of the charm.
+8. Switch the amp to **Leslie** and push the mod wheel up. The horn is at speed in about a second. The drum takes five. That disagreement is most of the charm.
 
 ## The panel, explained
 
@@ -87,14 +86,14 @@ In Ableton Live it appears under Plug-ins → Jardim Sonoro → Velvet73. There 
 | Drive | The combo preamp's level into the 147's 40 W amplifier. Past halfway it breaks up. |
 | Horn/Drum | Balance between the rotating horn (treble) and the drum (bass). |
 | Mic width | Angle between the two microphones: 0° is mono, 180° is one each side. |
-| Rotor | Slow (chorale), Fast (tremolo), or Stop (motors off: the rotors coast to rest). With **MOD** (top of the window) set to Rotor, the mod wheel (CC 1) switches slow and fast, as organists do; touching Rotor takes control back. |
+| Rotor | Slow (chorale), Fast (tremolo), or Stop (motors off: the rotors coast to rest). The mod wheel (CC 1) also switches slow and fast, as organists do; touching Rotor takes control back. |
 | Noise, Output | As on the Twin. |
 
 ![Velvet73 into the Leslie](docs/screenshot-leslie.png)
 
 The horn and the drum, seen from above, turn in the panel at the speed they are really turning. The pitch wobble is not an LFO: the horn's mouth really travels towards and away from each microphone, and so do its reflections off the cabinet walls, each with its own Doppler shift.
 
-MIDI CC 120 (All Sound Off) silences everything at once. **MOD** chooses what CC 1 does: Pedal (hold it and the dampers lift, for keyboards with no pedal jack) or Rotor (the Leslie's slow/fast). The **Pedal** lamp shows the dampers up, from either. The **harp** display shows each tine swinging; the glow is how far its tip moves.
+MIDI CC 120 (All Sound Off) silences everything at once. The **Pedal** lamp shows CC 64. The **harp** display shows each tine swinging; the glow is how far its tip moves.
 
 ## The presets
 
@@ -117,7 +116,7 @@ Changing preset resets the tines, so nothing from the last piano keeps ringing i
 - **The record that was mixed through the desk:** DI Console, Bass Boost at 70%.
 - **The piano in the rehearsal room nobody has serviced since 1983:** Road Worn, Noise 130%.
 - **Glass:** Bell, Hammer above Factory, Bright on.
-- **Sunday morning:** Chorale, MOD on Rotor, sustain pedal down, mod wheel up for the last chorus.
+- **Sunday morning:** Chorale, sustain pedal down, mod wheel up for the last chorus.
 
 ## Questions occasionally asked
 

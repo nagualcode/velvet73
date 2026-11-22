@@ -187,7 +187,7 @@ Ligação de época: Stage → pré "combo" (um estágio 12AX7 com controle de n
 | Doppler, reflexos | `leslie.rs` | geometria, não LFO: cada fonte gira no seu círculo; para cada microfone, 4 caminhos (direto, imagens nas paredes laterais a ±0,27 m com ganho 0,38, parede de trás a 0,25 m com 0,30), cada um lido de uma linha de atraso no comprimento real em movimento (interpolação de Hermite), com atenuação 1/d. Smith, Serafin, Abel & Berners, *Doppler Simulation and the Leslie*, DAFx 2002 | [ART][DESIGN] |
 | Diretividade | `leslie.rs` | corneta: 0,40 + 0,60·((1+cos α)/2)^1,5 e um passa-baixa por caminho de 1,8 kHz (de costas) a 9,3 kHz (de frente); tambor: 0,65 + 0,35·(1+cos α)/2 | [DESIGN] |
 | Microfones | `leslie.rs` | a 0,62 m do eixo, abertos de 0° (mono) a 180° (Mic Width) | [DESIGN] |
-| MOD (CC1) | `lib.rs` | parâmetro MOD: **Pedal** (padrão; CC1 ≥ 64 levanta os abafadores, somado ao CC64, para teclados sem pedal, como o nanoKEY) ou **Rotor** (≥ 64 = rápido, < 64 = lento; vale até o controle Rotor ser mexido). Trocar o papel solta o que o MOD segurava | [DESIGN, pedido do usuário] |
+| Roda de modulação | `lib.rs` | CC1 ≥ 64 = rápido, < 64 = lento; vale até o controle Rotor ser mexido | [DESIGN] |
 
 **Medido (testes em `leslie.rs` e `tests.rs`):**
 - Tom de 2 kHz pela corneta rápida: frequência oscila entre 1962 e 2037 Hz (previsto ±37 Hz = 2π·0,15 m·6,67 Hz / 343 m/s × 2 kHz).
